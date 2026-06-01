@@ -1907,7 +1907,7 @@ export async function enqueueUpdateLog(event, context) {
   console.log(projectKey);
 
   if (projectKey === "CTEST") {
-    // Dev --> CDEMO // Prod --> CWO // Stage --> CTEST
+    // Dev --> CDEMO // Prod --> CWO // Staging --> CTEST
     let retryCount = 0;
     let success = false;
 
@@ -2461,24 +2461,6 @@ export async function updateKPI(event, context) {
           fieldValue10083 + fieldValue10082 + fieldValue10081;
         let DFSValue = null;
         // console.log(`Actual Hours (Sum): ${fieldValue10065}`);
-        if (["Project", "Phase", "Activity", "Activity Group"].includes(type)) {
-          if (
-            !(
-              issueData.fields.summary.includes("Extra Work") ||
-              issueData.fields.summary.includes("Re-Work")
-            )
-          )
-            DFSValue =
-              fieldValue10093 != 0
-                ? ((fieldValue10093 - fieldValue10971) / fieldValue10971) * 100
-                : null;
-
-          if (fieldValue10093 === fieldValue10971) {
-            console.log("Updating DFS to 0");
-            DFSValue = 0;
-          }
-          console.log("KPI - ", type, DFSValue);
-        }
 
         if (["Activity"].includes(type)) {
           // For Activity issues, don't calculate DFS% - set to null
@@ -2488,88 +2470,56 @@ export async function updateKPI(event, context) {
           console.log("CASE 1---> Type: ", type, "--- Value:", DFSValue);
         } else if (["Activity Group"].includes(type)) {
           // For Activity Group: use its own standard hours (customfield_10061)
-          // not the propagated Close Std Hrs (customfield_10971)
-          const oldValue = DFSValue;
+          const standardHrs = fieldValue10061;
+          const actualHrs = fieldValue10093;
 
-          DFSValue =
-            fieldValue10093 != 0 && fieldValue10093 === fieldValue10061
-              ? 0
-              : (Number(DFSValue?.toFixed(1)) ?? null);
-
-          if (
-            (fieldValue10093 === 0 && fieldValue10061 === 0) ||
-            (fieldValue10093 === null && fieldValue10061 === null)
-          ) {
+          if (standardHrs !== 0 && standardHrs !== null) {
+            if (actualHrs === null || actualHrs === 0) {
+              DFSValue = null; // If actual hours are 0 or null, set DFS% to null
+            } else if (actualHrs === standardHrs) {
+              DFSValue = 0;
+            } else if (actualHrs !== 0) {
+              DFSValue = Number(
+                (((actualHrs - standardHrs) / standardHrs) * 100).toFixed(1),
+              );
+            }
+          } else {
             DFSValue = null;
-            console.log(
-              "CASE 2.1---> Type: ",
-              type,
-              "-- Old Value : ",
-              oldValue,
-              " | --- Value:",
-              DFSValue,
-              " && Date fields = ",
-              fieldValue10093,
-              " & ",
-              fieldValue10061,
-            );
           }
+
           console.log(
-            "CASE 2---> Type: ",
-            type,
-            "-- Old Value : ",
-            oldValue,
-            " | --- Value:",
-            DFSValue,
-            " && Date fields = ",
-            fieldValue10093,
-            " & ",
-            fieldValue10061,
+            `CASE 2.1---> Type: ${type} | Actual: ${actualHrs}, Std: ${standardHrs}, DFS: ${DFSValue}`,
           );
         } else if (["Project", "Phase"].includes(type)) {
-          const oldValue = DFSValue;
+          // For Project/Phase: use propagated Close Std Hrs (customfield_10971)
+          // const standardHrs = fieldValue10971;
+          // For Project/Phase: use propagated Standard Hours Tot(customfield_10061)
+          const standardHrs = fieldValue10061;
+          const actualHrs = fieldValue10093;
 
-          DFSValue =
-            fieldValue10093 != 0 && fieldValue10093 === fieldValue10971
-              ? 0
-              : (Number(DFSValue?.toFixed(1)) ?? null);
-
-          if (
-            (fieldValue10093 === 0 && fieldValue10971 === 0) ||
-            (fieldValue10093 === null && fieldValue10971 === null)
-          ) {
+          if (standardHrs !== 0 && standardHrs !== null) {
+            if (actualHrs === null || actualHrs === 0) {
+              DFSValue = null; // If actual hours are 0 or null, set DFS% to null
+            } else if (actualHrs === standardHrs) {
+              DFSValue = 0;
+            } else if (actualHrs !== 0) {
+              DFSValue = Number(
+                (((actualHrs - standardHrs) / standardHrs) * 100).toFixed(1),
+              );
+            }
+          } else {
             DFSValue = null;
-            console.log(
-              "CASE 2.1---> Type: ",
-              type,
-              "-- Old Value : ",
-              oldValue,
-              " | --- Value:",
-              DFSValue,
-              " && Date fields = ",
-              fieldValue10093,
-              " & ",
-              fieldValue10971,
-            );
           }
+
           console.log(
-            "CASE 2---> Type: ",
-            type,
-            "-- Old Value : ",
-            oldValue,
-            " | --- Value:",
-            DFSValue,
-            " && Date fields = ",
-            fieldValue10093,
-            " & ",
-            fieldValue10971,
+            `CASE 2.2---> Type: ${type} | Actual: ${actualHrs}, Std: ${standardHrs}, DFS: ${DFSValue}`,
           );
         } else {
           DFSValue = null;
           console.log("CASE 3---> Type: ", type, "--- Value:", DFSValue);
         }
 
-        console.log("DFS VAlue", type, DFSValue);
+        console.log("Final DFS Value", type, DFSValue);
 
         let extraWorkValue = null;
         let reWorkValue = null;
@@ -3319,7 +3269,7 @@ export async function updateToday(context) {
   console.log(context);
   // const rawJql = `project in ( CWO) AND issuetype in (Activity, "Work Order", Task) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`;
   // const rawJql = `project in (CDEMO) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`;
-  const rawJql = `project in (CTEST) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`; // Stage --> CTEST
+  const rawJql = `project in (CTEST) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`;
 
   await updateIssuesDateField(rawJql, "customfield_11168");
 }
