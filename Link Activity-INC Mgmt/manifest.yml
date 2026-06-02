@@ -12,6 +12,18 @@ modules:
         isInline: true
       resolver:
         function: resolver
+    - key: incident-link-field
+      name: Incident Enhancement
+      description: Select an Incident linked to the chosen Project.
+      type: string
+      render: native
+      resource: incidentMain
+      edit:
+        resource: incidentEdit
+        render: native
+        isInline: true
+      resolver:
+        function: resolver
   function:
     - key: resolver
       handler: index.handler
@@ -20,11 +32,15 @@ resources:
     path: src/frontend/index.jsx
   - key: edit
     path: src/frontend/edit.jsx
+  - key: incidentMain
+    path: src/frontend/incidentView.jsx
+  - key: incidentEdit
+    path: src/frontend/incidentEdit.jsx
 
 permissions:
   content:
     styles:
-      - 'unsafe-inline'
+      - "unsafe-inline"
   scopes:
     - storage:app
     - read:jira-work
