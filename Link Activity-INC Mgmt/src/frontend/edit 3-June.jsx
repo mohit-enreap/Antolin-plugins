@@ -56,11 +56,6 @@ const Edit = () => {
     }
   };
 
-  // Derive Jira project key prefix from an issue key, e.g. "CTEST-269" -> "CTEST".
-  // Falls back to "CWO" so production behaviour is unchanged if no key is present.
-  const getProjectPrefix = (issueKey) =>
-    issueKey && issueKey.includes("-") ? issueKey.split("-")[0] : "CWO";
-
   useEffect(() => {
     const initialize = async () => {
       const contextData = await view.getContext();
@@ -111,14 +106,13 @@ const Edit = () => {
         // --- IF-ELSE JQL LOGIC FOR INITIALIZE ---
         const originalProject = project;
         const spacedProject = project.replace(/-/g, " ");
-        const projectPrefix = getProjectPrefix(projectKey);
 
-        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
+        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = CWO ORDER BY summary ASC`;
         let activityIssues = await fetchIssuesByJQL(activityJQL);
 
         // Fallback to spaced query if the original fails and the strings are actually different
         if (activityIssues.length === 0 && originalProject !== spacedProject) {
-          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
+          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = CWO ORDER BY summary ASC`;
           activityIssues = await fetchIssuesByJQL(activityJQL);
         }
         // ----------------------------------------
@@ -158,13 +152,13 @@ const Edit = () => {
         // --- IF-ELSE JQL LOGIC FOR ON-CHANGE ---
         const originalProject = selectedProject.value;
         const spacedProject = selectedProject.value.replace(/-/g, " ");
-        const projectPrefix = getProjectPrefix(selectedProject.key);
 
-        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
+        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = CWO ORDER BY summary ASC`;
         let activityIssues = await fetchIssuesByJQL(activityJQL);
 
+        // Fallback to spaced query if the original fails and the strings are actually different
         if (activityIssues.length === 0 && originalProject !== spacedProject) {
-          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
+          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = CWO ORDER BY summary ASC`;
           activityIssues = await fetchIssuesByJQL(activityJQL);
         }
         // ---------------------------------------
