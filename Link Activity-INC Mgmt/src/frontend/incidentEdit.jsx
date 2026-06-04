@@ -81,6 +81,7 @@ const Edit = () => {
   useEffect(() => {
     const initialize = async () => {
       const contextData = await view.getContext();
+      console.log("FULL CONTEXT:", JSON.stringify(contextData, null, 2));
       const fieldVal = contextData.extension.fieldValue?.toString() || "";
       setRenderContext(contextData.extension.renderContext);
       setValue(fieldVal);
