@@ -141,5 +141,28 @@ resolver.define("getIssuesByJQL", async ({ payload }) => {
 
 // Fetch all "Project" issue type issues
 
+// Fetch a single issue by key (used to read the host Activity's project + summary).
+resolver.define("getIssueByKey", async ({ payload }) => {
+  const { issueKey } = payload;
+  if (!issueKey) {
+    return { error: "issueKey not provided" };
+  }
+  try {
+    const response = await api
+      .asApp()
+      .requestJira(
+        route`/rest/api/3/issue/${issueKey}?fields=summary,customfield_10039,customfield_10078`,
+      );
+    if (!response.ok) {
+      return { error: `Failed to fetch issue. Status: ${response.status}` };
+    }
+    const data = await response.json();
+    return { key: data.key, fields: data.fields };
+  } catch (error) {
+    return { error: `Error fetching issue: ${error.message}` };
+  }
+});
+
 // Export all resolver definitions
+
 export const handler = resolver.getDefinitions();

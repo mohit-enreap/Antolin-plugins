@@ -15,40 +15,50 @@ import { view, invoke } from "@forge/bridge";
 const Edit = () => {
   const [value, setValue] = useState("");
   const [renderContext, setRenderContext] = useState(null);
-  const [projectOptions, setProjectOptions] = useState([]);
+
+  const [projectName, setProjectName] = useState(null); // display only (read-only)
+  const [projectKey, setProjectKey] = useState(null); // stable key used for matching
+  const [activityNature, setActivityNature] = useState(null); // "Extra Work" | "Re-Work" | null
+
   const [incidentOptions, setIncidentOptions] = useState([]);
-  const [selectedProject, setSelectedProject] = useState(null);
   const [incidentType, setIncidentType] = useState(null);
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [isIncidentLoading, setIsIncidentLoading] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
 
-  const [projectError, setProjectError] = useState(true);
-  const [incidentTypeError, setIncidentTypeError] = useState(true);
+  const [incidentTypeError, setIncidentTypeError] = useState(false);
 
   const context = useProductContext();
 
-  const incidentTypeOptions = [
-    { label: "GUIDES & STDS (Re-Work)", value: "GUIDES & STDS (Re-Work)" },
-    { label: "DESIGN CRITERIA (Re-Work)", value: "DESIGN CRITERIA (Re-Work)" },
-    { label: "QUALITY GATES", value: "QUALITY GATES" },
+  const extraWorkTypes = [
     { label: "MUA FORMAL (Extra Work)", value: "MUA FORMAL (Extra Work)" },
     { label: "MUA INFORMAL (Extra Work)", value: "MUA INFORMAL (Extra Work)" },
-    { label: "SW & HW", value: "SW & HW" },
-    { label: "RESOURCES", value: "RESOURCES" },
+  ];
+  const reWorkTypes = [
+    { label: "GUIDES & STDS (Re-Work)", value: "GUIDES & STDS (Re-Work)" },
+    { label: "DESIGN CRITERIA (Re-Work)", value: "DESIGN CRITERIA (Re-Work)" },
   ];
 
-  // Incident dropdown only shows for these Extra Work / Re-Work types.
-  const showIncident = (incident) =>
-    [
-      "GUIDES & STDS (Re-Work)",
-      "DESIGN CRITERIA (Re-Work)",
-      "MUA FORMAL (Extra Work)",
-      "MUA INFORMAL (Extra Work)",
-    ].includes(incident);
+  const incidentTypeOptions =
+    activityNature === "Extra Work"
+      ? extraWorkTypes
+      : activityNature === "Re-Work"
+        ? reWorkTypes
+        : [];
 
-  // Map incident type -> keyword to match in the incident summary.
-  const keywordFor = (incidentValue) =>
-    incidentValue.includes("Extra Work") ? "Extra Work" : "Re-Work";
+  const incidentTypesForNature = (nature) =>
+    nature === "Extra Work"
+      ? ["MUA FORMAL (Extra Work)", "MUA INFORMAL (Extra Work)"]
+      : nature === "Re-Work"
+        ? ["GUIDES & STDS (Re-Work)", "DESIGN CRITERIA (Re-Work)"]
+        : [];
+
+  const detectNature = (summary) => {
+    if (!summary) return null;
+    if (summary.includes("Extra Work")) return "Extra Work";
+    if (summary.includes("Re-Work")) return "Re-Work";
+    return null;
+  };
 
   const fetchIssuesByJQL = async (jql) => {
     try {
@@ -60,88 +70,98 @@ const Edit = () => {
     }
   };
 
-  // Incidents stored in INCENC, linked to a CTEST project by name,
-  // filtered by Extra Work / Re-Work keyword in the summary.
-  const buildIncidentJQL = (projectValue, keyword) =>
-    `"type" = Incident AND "Project Name[Short text]" ~ "${projectValue}" AND summary ~ "${keyword}" AND Project = INCENC ORDER BY key ASC`;
-
-  // Hyphen/space fallback (mirrors the Activity flow in the existing field).
-  const fetchIncidents = async (projectValue, keyword) => {
-    const original = projectValue;
-    const spaced = projectValue.replace(/-/g, " ");
-
-    let issues = await fetchIssuesByJQL(buildIncidentJQL(original, keyword));
-    if (issues.length === 0 && original !== spaced) {
-      issues = await fetchIssuesByJQL(buildIncidentJQL(spaced, keyword));
-    }
-    return issues;
+  // Key-based JQL: match incidents linked to the Project work-item KEY (stable),
+  // filtered by the incident's "Incident type" field, grouped by nature.
+  const buildIncidentJQL = (projKey, nature) => {
+    const types = incidentTypesForNature(nature)
+      .map((t) => `"${t}"`)
+      .join(", ");
+    return `"type" = Incident AND issue in linkedIssues("${projKey}") AND "Incident type" in (${types}) AND Project = INCENC ORDER BY key ASC`;
   };
 
-  // Load CTEST projects on mount, and restore any saved value.
+  const fetchIncidents = async (projKey, nature) => {
+    if (!projKey) return [];
+    return await fetchIssuesByJQL(buildIncidentJQL(projKey, nature));
+  };
+
   useEffect(() => {
     const initialize = async () => {
       const contextData = await view.getContext();
-      console.log("FULL CONTEXT:", JSON.stringify(contextData, null, 2));
       const fieldVal = contextData.extension.fieldValue?.toString() || "";
       setRenderContext(contextData.extension.renderContext);
       setValue(fieldVal);
 
       // Saved format: projectKey##projectName##incidentType##incidentLabel##incidentKey
-      const [projectKey, project, incident, incidentLabel, incidentKey] =
-        fieldVal.split("##");
+      const [
+        savedProjKey,
+        savedProject,
+        savedIncidentType,
+        savedIncidentLabel,
+        savedIncidentKey,
+      ] = fieldVal.split("##");
 
-      if (incident) {
-        const selected = incidentTypeOptions.find(
-          (opt) => opt.value === incident,
-        );
-        if (selected) setIncidentType(selected);
+      const hostKey = contextData.extension?.issue?.key;
+      let pKey = savedProjKey || null;
+      let pName = savedProject || null;
+      let nature = null;
+
+      if (hostKey) {
+        try {
+          const res = await invoke("getIssueByKey", { issueKey: hostKey });
+          if (res && res.fields) {
+            pKey = res.fields.customfield_10078 || pKey; // Project work-item KEY
+            pName = res.fields.customfield_10039 || pName; // Project name (display)
+            nature = detectNature(res.fields.summary);
+          }
+        } catch (e) {
+          console.error("Failed to fetch host issue:", e);
+        }
       }
 
-      if (project) {
-        setSelectedProject({ label: project, value: project, key: projectKey });
+      if (savedIncidentType) {
+        const all = [...extraWorkTypes, ...reWorkTypes];
+        const match = all.find((o) => o.value === savedIncidentType);
+        if (match) {
+          setIncidentType(match);
+          if (!nature) {
+            nature = savedIncidentType.includes("Extra Work")
+              ? "Extra Work"
+              : "Re-Work";
+          }
+        }
       }
 
-      // Only CTEST projects.
-      const projectIssues = await fetchIssuesByJQL(
-        `"type" = Project AND Project = CTEST ORDER BY key ASC`,
-      );
-      setProjectOptions(
-        projectIssues.map((issue) => ({
-          label: issue.fields.summary,
-          value: issue.fields.summary,
-          key: issue.key,
-        })),
-      );
+      setProjectKey(pKey);
+      setProjectName(pName);
+      setActivityNature(nature);
 
-      if (project && incident && showIncident(incident)) {
-        const incidents = await fetchIncidents(project, keywordFor(incident));
+      if (pKey && nature && savedIncidentType) {
+        const incidents = await fetchIncidents(pKey, nature);
         const opts = incidents.map((issue) => ({
           label: `${issue.key} | ${issue.fields.summary}`,
           value: issue.key,
         }));
         setIncidentOptions(opts);
-        if (incidentKey) {
-          const matched = opts.find((opt) => opt.value === incidentKey);
+        if (savedIncidentKey) {
+          const matched = opts.find((o) => o.value === savedIncidentKey);
           if (matched) setSelectedIncident(matched);
         }
       }
+
+      setIsInitializing(false);
     };
 
     initialize();
   }, [context]);
 
-  // Reload incidents when project or incident type changes.
   useEffect(() => {
     const loadIncidents = async () => {
+      if (isInitializing) return;
       if (incidentType) setIncidentTypeError(false);
-      if (selectedProject) setProjectError(false);
 
-      if (selectedProject && incidentType && showIncident(incidentType.value)) {
+      if (projectKey && activityNature && incidentType) {
         setIsIncidentLoading(true);
-        const incidents = await fetchIncidents(
-          selectedProject.value,
-          keywordFor(incidentType.value),
-        );
+        const incidents = await fetchIncidents(projectKey, activityNature);
         setIncidentOptions(
           incidents.map((issue) => ({
             label: `${issue.key} | ${issue.fields.summary}`,
@@ -154,17 +174,14 @@ const Edit = () => {
         setIsIncidentLoading(false);
       }
     };
-
     loadIncidents();
-  }, [incidentType, selectedProject]);
+  }, [incidentType]);
 
   const onSubmit = async () => {
     try {
-      setProjectError(false);
       setIncidentTypeError(false);
 
-      if (!selectedProject) {
-        setProjectError(true);
+      if (!activityNature) {
         await view.submit(null);
         return;
       }
@@ -174,22 +191,15 @@ const Edit = () => {
         return;
       }
 
+      // Saved format: projectKey##projectName##incidentType##incidentLabel##incidentKey
       const valueToSave =
-        `${selectedProject?.key || ""}##${selectedProject?.value || ""}##` +
-        `${incidentType?.value || ""}##${selectedIncident?.label || ""}##` +
-        `${selectedIncident?.value || ""}`;
+        `${projectKey || ""}##${projectName || ""}##${incidentType?.value || ""}##` +
+        `${selectedIncident?.label || ""}##${selectedIncident?.value || ""}`;
       await view.submit(valueToSave);
     } catch (e) {
       console.error("Submit error:", e);
     }
   };
-
-  const handleProjectChange = useCallback((option) => {
-    setSelectedProject(option);
-    setSelectedIncident(null);
-    setIncidentOptions([]);
-    setProjectError(false);
-  }, []);
 
   const handleIncidentTypeChange = useCallback((option) => {
     setIncidentType(option);
@@ -202,24 +212,21 @@ const Edit = () => {
     setSelectedIncident(option);
   }, []);
 
+  if (!isInitializing && !activityNature) {
+    return (
+      <CustomFieldEdit onSubmit={onSubmit} hideActionButtons>
+        <Text>
+          Incidents can only be added on Extra Work or Re-Work activities.
+        </Text>
+      </CustomFieldEdit>
+    );
+  }
+
   return (
     <CustomFieldEdit onSubmit={onSubmit} hideActionButtons>
-      <Label>
-        Project <RequiredAsterisk />
-      </Label>
-      <Select
-        placeholder="Select Project ..."
-        options={projectOptions}
-        onChange={handleProjectChange}
-        value={selectedProject}
-        isLoading={projectOptions.length === 0}
-      />
-      {projectError && (
-        <ErrorMessage>
-          Project is required. Please select a project.
-        </ErrorMessage>
-      )}
-      <HelperMessage>Select a project to view its incidents</HelperMessage>
+      <Label>Project</Label>
+      <Text>{projectName || "Loading..."}</Text>
+      <HelperMessage>Auto-filled from the current activity</HelperMessage>
       <Text></Text>
 
       <Label>
@@ -230,6 +237,7 @@ const Edit = () => {
         options={incidentTypeOptions}
         onChange={handleIncidentTypeChange}
         value={incidentType}
+        isLoading={isInitializing}
       />
       {incidentTypeError && (
         <ErrorMessage>
@@ -248,7 +256,7 @@ const Edit = () => {
       </HelperMessage>
       <Text></Text>
 
-      {incidentType?.value && showIncident(incidentType.value) && (
+      {incidentType?.value && (
         <>
           <Label>Incident</Label>
           <Select
@@ -256,12 +264,9 @@ const Edit = () => {
             options={incidentOptions}
             onChange={handleIncidentChange}
             value={selectedIncident}
-            isDisabled={!selectedProject}
             isLoading={isIncidentLoading}
           />
-          <HelperMessage>
-            Incidents linked to the selected project
-          </HelperMessage>
+          <HelperMessage>Incidents linked to the current project</HelperMessage>
         </>
       )}
     </CustomFieldEdit>
