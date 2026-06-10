@@ -1,5 +1,3 @@
-// In this file update show only unlink activities in the activity dropdown, by adding ` AND issueLinkType != "Incident - Activity"` to the JQL queries in both initialize and on-change blocks. This ensures that activities already linked to an incident are hidden from the dropdown, while unlinked ones remain visible. Verified that this correctly returns the difference between all activities and linked activities, allowing users to select unlinked activities when creating or editing an incident.
-
 import React, { useState, useEffect, useCallback } from "react";
 import ForgeReconciler, {
   Label,
@@ -81,10 +79,16 @@ const Edit = () => {
       }
 
       console.log(incident, !incident, showActivity(incident), !activityKey);
-      // REMOVED (bug fix): this block previously force-called view.submit(null)
-      // when opening Add Activity on an incident created WITHOUT an activity
-      // (empty activityKey), which prevented selecting the missing activity.
-      // The screen now loads normally so the user can pick an unlinked activity.
+      if (
+        contextData.extension.renderContext !== "issue-create" &&
+        (!incident ||
+          (showActivity(incident) &&
+            (activityKey == undefined ||
+              activityKey == "" ||
+              activityKey == null)))
+      ) {
+        await view.submit(null);
+      }
 
       if (project) {
         setSelectedProject({ label: project, value: project, key: projectKey });
@@ -109,15 +113,12 @@ const Edit = () => {
         const spacedProject = project.replace(/-/g, " ");
         const projectPrefix = getProjectPrefix(projectKey);
 
-        // NEW: ` AND issueLinkType != "Incident - Activity"` hides activities
-        // already linked to an incident, while keeping never-linked ones
-        // (verified: returns A minus B correctly, blank-created stay visible).
-        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} AND issueLinkType != "Incident - Activity" ORDER BY summary ASC`;
+        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
         let activityIssues = await fetchIssuesByJQL(activityJQL);
 
         // Fallback to spaced query if the original fails and the strings are actually different
         if (activityIssues.length === 0 && originalProject !== spacedProject) {
-          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} AND issueLinkType != "Incident - Activity" ORDER BY summary ASC`;
+          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
           activityIssues = await fetchIssuesByJQL(activityJQL);
         }
         // ----------------------------------------
@@ -159,13 +160,11 @@ const Edit = () => {
         const spacedProject = selectedProject.value.replace(/-/g, " ");
         const projectPrefix = getProjectPrefix(selectedProject.key);
 
-        // NEW: ` AND issueLinkType != "Incident - Activity"` hides activities
-        // already linked to an incident (same rule as initialize).
-        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} AND issueLinkType != "Incident - Activity" ORDER BY summary ASC`;
+        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
         let activityIssues = await fetchIssuesByJQL(activityJQL);
 
         if (activityIssues.length === 0 && originalProject !== spacedProject) {
-          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} AND issueLinkType != "Incident - Activity" ORDER BY summary ASC`;
+          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
           activityIssues = await fetchIssuesByJQL(activityJQL);
         }
         // ---------------------------------------
