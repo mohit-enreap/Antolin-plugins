@@ -1,4 +1,5 @@
 // In Show unlinked activities: the activity dropdown now shows all relevant activities, even those not yet linked to the incident, so users can select and link them right from the start. This is achieved by modifying the JQL to exclude only activities linked to OTHER incidents, while keeping this incident's own linked activity (if any) visible. On create, when no activity is linked yet, all relevant activities are shown. This change allows users to easily find and link the correct activity without needing to refresh or save first.
+// This is updated code - whith same link activity and show all unlink activities in edit and create issue.
 
 import React, { useState, useEffect, useCallback } from "react";
 import ForgeReconciler, {
