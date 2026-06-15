@@ -1,5 +1,3 @@
-// edit June-09.jsx
-
 import React, { useState, useEffect, useCallback } from "react";
 import ForgeReconciler, {
   Label,
@@ -104,28 +102,20 @@ const Edit = () => {
           ? "Extra Work"
           : "Re-Work";
 
-        // --- IF-ELSE JQL LOGIC FOR INITIALIZE ---
-        const originalProject = project;
-        const spacedProject = project.replace(/-/g, " ");
+        // --- JQL LOGIC FOR INITIALIZE (match by Project KEY, not name) ---
+        // Match activities by their "Project Key" (customfield_10078), which holds
+        // the parent project's key (e.g. "CTEST-716"). This is an exact key match,
+        // so it avoids the hyphen-vs-space ambiguity of the display name
+        // ("Sagar Test-1" vs "Sagar Test 1") that caused empty dropdowns.
         const projectPrefix = getProjectPrefix(projectKey);
 
-        // Hide activities linked to OTHER incidents, but KEEP this incident's
-        // own linked activity (activityKey) so it stays in the dropdown AND
-        // gets auto-selected (pre-filled) below. On create, activityKey is
-        // empty, so we use the plain `!=` (no OR clause).
         const linkClause = activityKey
           ? `AND (issueLinkType != "Incident - Activity" OR key = "${activityKey}")`
           : `AND issueLinkType != "Incident - Activity"`;
 
-        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ${linkClause} ORDER BY summary ASC`;
-        let activityIssues = await fetchIssuesByJQL(activityJQL);
-
-        // Fallback to spaced query if the original fails and the strings are actually different
-        if (activityIssues.length === 0 && originalProject !== spacedProject) {
-          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ${linkClause} ORDER BY summary ASC`;
-          activityIssues = await fetchIssuesByJQL(activityJQL);
-        }
-        // ----------------------------------------
+        const activityJQL = `"type" = Activity AND "Project Key" ~ "${projectKey}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ${linkClause} ORDER BY summary ASC`;
+        const activityIssues = await fetchIssuesByJQL(activityJQL);
+        // ----------------------------------------------------------------
 
         const activityOptions = activityIssues.map((issue) => ({
           label: `${issue.fields.customfield_10970} | ${issue.fields.summary}`,
@@ -159,27 +149,19 @@ const Edit = () => {
           ? "Extra Work"
           : "Re-Work";
 
-        // --- IF-ELSE JQL LOGIC FOR ON-CHANGE ---
-        const originalProject = selectedProject.value;
-        const spacedProject = selectedProject.value.replace(/-/g, " ");
+        // --- JQL LOGIC FOR ON-CHANGE (match by Project KEY, not name) ---
+        // selectedProject.key holds the project key (e.g. "CTEST-716"); match on
+        // "Project Key" for an exact lookup and drop the hyphen/space fallback.
         const projectPrefix = getProjectPrefix(selectedProject.key);
 
-        // Keep this incident's own linked activity visible (if any), hide
-        // activities linked to OTHER incidents. selectedActivity?.value holds
-        // the current selection; on create it's empty, so plain `!=` is used.
         const currentKey = selectedActivity?.value || "";
         const linkClause = currentKey
           ? `AND (issueLinkType != "Incident - Activity" OR key = "${currentKey}")`
           : `AND issueLinkType != "Incident - Activity"`;
 
-        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ${linkClause} ORDER BY summary ASC`;
-        let activityIssues = await fetchIssuesByJQL(activityJQL);
-
-        if (activityIssues.length === 0 && originalProject !== spacedProject) {
-          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ${linkClause} ORDER BY summary ASC`;
-          activityIssues = await fetchIssuesByJQL(activityJQL);
-        }
-        // ---------------------------------------
+        const activityJQL = `"type" = Activity AND "Project Key" ~ "${selectedProject.key}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ${linkClause} ORDER BY summary ASC`;
+        const activityIssues = await fetchIssuesByJQL(activityJQL);
+        // ----------------------------------------------------------------
 
         const activityOptions = activityIssues.map((issue) => ({
           label: `${issue.fields.customfield_10970} | ${issue.fields.summary}`,
