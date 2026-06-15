@@ -1,5 +1,7 @@
 // Main Production file copyedited.
-// in here not show Unlinked actitvity only.
+// in here not show Unlinked actitvity only. (always show all actitvities.)
+// Change hardcoded (CWO) JQL to dynamic JQL based on project key prefix.
+// Using getProjectPrefix this function we make dynamic project like CTEST and CWO.
 
 import React, { useState, useEffect, useCallback } from "react";
 import ForgeReconciler, {
