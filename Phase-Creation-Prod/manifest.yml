@@ -38,7 +38,7 @@ modules:
           # jiraExpression: issue.customfield_10045?.some(u => u.accountId == user.accountId) || issue.customfield_10044?.some(u => u.accountId == user.accountId) || issue.customfield_10079?.some(u => u.accountId == user.accountId) || issue.customfield_10839?.some(u => u.accountId == user.accountId)
       resolver:
         function: resolver
-      viewportSize: large
+      viewportSize: max
       title: Create Phase
     - key: quotation-creation-issue-action
       resource: quotation
@@ -51,7 +51,7 @@ modules:
           # jiraExpression: issue.customfield_10045?.some(u => u.accountId == user.accountId) || issue.customfield_10044?.some(u => u.accountId == user.accountId) || issue.customfield_10079?.some(u => u.accountId == user.accountId) || issue.customfield_10839?.some(u => u.accountId == user.accountId)
       resolver:
         function: resolver
-      viewportSize: large
+      viewportSize: max
       title: Create Quotation
 
   jira:projectSettingsPage:
