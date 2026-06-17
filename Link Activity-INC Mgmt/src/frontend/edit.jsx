@@ -46,14 +46,26 @@ const Edit = () => {
       "MUA INFORMAL (Extra Work)",
     ].includes(incident);
 
-  const fetchIssuesByJQL = async (jql) => {
-    try {
-      const response = await invoke("getIssuesByJQL", { jql });
-      return response.issues || [];
-    } catch (error) {
-      console.error("Error fetching issues:", error);
-      return [];
+  const fetchIssuesByJQL = async (jql, retries = 3, delayMs = 600) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const response = await invoke("getIssuesByJQL", { jql });
+        if (response && response.error) {
+          throw new Error(response.error);
+        }
+        return response.issues || [];
+      } catch (error) {
+        console.error(`fetchIssuesByJQL attempt ${attempt} failed:`, error);
+        if (attempt < retries) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, delayMs * attempt),
+          );
+        } else {
+          return [];
+        }
+      }
     }
+    return [];
   };
 
   // Derive Jira project key prefix from an issue key, e.g. "CTEST-269" -> "CTEST".
@@ -79,16 +91,10 @@ const Edit = () => {
       }
 
       console.log(incident, !incident, showActivity(incident), !activityKey);
-      if (
-        contextData.extension.renderContext !== "issue-create" &&
-        (!incident ||
-          (showActivity(incident) &&
-            (activityKey == undefined ||
-              activityKey == "" ||
-              activityKey == null)))
-      ) {
-        await view.submit(null);
-      }
+      // REMOVED (bug fix): this block previously force-called view.submit(null)
+      // when opening Add Activity on an incident created WITHOUT an activity
+      // (empty activityKey), which prevented selecting the missing activity.
+      // The screen now loads normally so the user can pick an unlinked activity.
 
       if (project) {
         setSelectedProject({ label: project, value: project, key: projectKey });
@@ -108,20 +114,20 @@ const Edit = () => {
           ? "Extra Work"
           : "Re-Work";
 
-        // --- IF-ELSE JQL LOGIC FOR INITIALIZE ---
-        const originalProject = project;
-        const spacedProject = project.replace(/-/g, " ");
+        // --- JQL LOGIC FOR INITIALIZE (match by Project KEY, not name) ---
+        // Match activities by their "Project Key" (customfield_10078), which holds
+        // the parent project's key (e.g. "CTEST-716"). This is an exact key match,
+        // so it avoids the hyphen-vs-space ambiguity of the display name
+        // ("Sagar Test-1" vs "Sagar Test 1") that caused empty dropdowns.
         const projectPrefix = getProjectPrefix(projectKey);
 
-        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
-        let activityIssues = await fetchIssuesByJQL(activityJQL);
+        const linkClause = activityKey
+          ? `AND (issueLinkType != "Incident - Activity" OR key = "${activityKey}")`
+          : `AND issueLinkType != "Incident - Activity"`;
 
-        // Fallback to spaced query if the original fails and the strings are actually different
-        if (activityIssues.length === 0 && originalProject !== spacedProject) {
-          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
-          activityIssues = await fetchIssuesByJQL(activityJQL);
-        }
-        // ----------------------------------------
+        const activityJQL = `"type" = Activity AND "Project Key" ~ "${projectKey}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ${linkClause} ORDER BY summary ASC`;
+        const activityIssues = await fetchIssuesByJQL(activityJQL);
+        // ----------------------------------------------------------------
 
         const activityOptions = activityIssues.map((issue) => ({
           label: `${issue.fields.customfield_10970} | ${issue.fields.summary}`,
@@ -155,19 +161,19 @@ const Edit = () => {
           ? "Extra Work"
           : "Re-Work";
 
-        // --- IF-ELSE JQL LOGIC FOR ON-CHANGE ---
-        const originalProject = selectedProject.value;
-        const spacedProject = selectedProject.value.replace(/-/g, " ");
+        // --- JQL LOGIC FOR ON-CHANGE (match by Project KEY, not name) ---
+        // selectedProject.key holds the project key (e.g. "CTEST-716"); match on
+        // "Project Key" for an exact lookup and drop the hyphen/space fallback.
         const projectPrefix = getProjectPrefix(selectedProject.key);
 
-        let activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${originalProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
-        let activityIssues = await fetchIssuesByJQL(activityJQL);
+        const currentKey = selectedActivity?.value || "";
+        const linkClause = currentKey
+          ? `AND (issueLinkType != "Incident - Activity" OR key = "${currentKey}")`
+          : `AND issueLinkType != "Incident - Activity"`;
 
-        if (activityIssues.length === 0 && originalProject !== spacedProject) {
-          activityJQL = `"type" = Activity AND "Project Name[Short text]" ~ "${spacedProject}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
-          activityIssues = await fetchIssuesByJQL(activityJQL);
-        }
-        // ---------------------------------------
+        const activityJQL = `"type" = Activity AND "Project Key" ~ "${selectedProject.key}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ${linkClause} ORDER BY summary ASC`;
+        const activityIssues = await fetchIssuesByJQL(activityJQL);
+        // ----------------------------------------------------------------
 
         const activityOptions = activityIssues.map((issue) => ({
           label: `${issue.fields.customfield_10970} | ${issue.fields.summary}`,
