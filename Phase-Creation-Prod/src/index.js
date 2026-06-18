@@ -373,7 +373,7 @@ const calculateAndUpdateField = async (parentIssueKey) => {
         );
       } else {
         console.error(
-          `Failed to fetch data for issue ${issueKey}: ${error.message}`,
+          `Failed to fetch data for issue ${issueKey}: ${issueResponse.status}`,
         );
       }
     }
@@ -410,7 +410,7 @@ const calculateAndUpdateField = async (parentIssueKey) => {
     }
 
     console.log(
-      `Successfully updated parent issue ${parentIssueKey} with total sum: ${totalSum}`,
+      `Successfully updated parent issue ${parentIssueKey} with total sum: ${totals.customfield_10061}`,
     );
   } catch (error) {
     console.error("Error in calculateAndUpdateField:", error);
@@ -1673,6 +1673,58 @@ async function fetchParentIssueId(issueId) {
   }
 }
 
+// Returns true only if EVERY descendant (Activity, Work Order, Task) under
+// the given issue is Closed. Used to gate Activity Group DFS + 10971 snapshot.
+async function areAllDescendantsClosed(issueKey) {
+  let allClosed = true; // assume closed until we find one that isn't
+  let descendantCount = 0; // guard against "no children" returning a false true
+
+  async function traverse(key) {
+    const res = await retryJiraApiCall(() =>
+      api
+        .asApp()
+        .requestJira(
+          route`/rest/api/3/issue/${key}?fields=issuetype,issuelinks,status`,
+        ),
+    );
+    const issue = await res.json();
+
+    // Find child (outward) issues via the WBSGantt hierarchy link
+    const childKeys = issue.fields.issuelinks
+      .filter(
+        (link) =>
+          link.type.name === "Hierarchy link (WBSGantt)" && link.outwardIssue,
+      )
+      .map((link) => link.outwardIssue.key);
+
+    for (const childKey of childKeys) {
+      // We only fetch the child's status; the recursive call fetches its links
+      const childRes = await retryJiraApiCall(() =>
+        api
+          .asApp()
+          .requestJira(route`/rest/api/3/issue/${childKey}?fields=status`),
+      );
+      const childIssue = await childRes.json();
+
+      descendantCount++;
+      if (childIssue.fields.status.name !== "Closed") {
+        allClosed = false;
+        return; // short-circuit: one open descendant is enough to fail
+      }
+
+      // Recurse into this child's own descendants
+      await traverse(childKey);
+      if (!allClosed) return; // bubble the short-circuit up
+    }
+  }
+
+  await traverse(issueKey);
+
+  // If there were no descendants at all, treat as NOT all-closed
+  // (an empty Activity Group should not show a DFS%)
+  return descendantCount > 0 && allClosed;
+}
+
 // Recursive function to propagate updates up the hierarchy
 async function propagateActivityHours(currentIssueId, customFieldKey) {
   try {
@@ -2462,6 +2514,7 @@ export async function updateKPI(event, context) {
         const fieldValue10065 =
           fieldValue10083 + fieldValue10082 + fieldValue10081;
         let DFSValue = null;
+        let agCloseStdHrsToSet = undefined; // holds the AG's 10971 to write: a number (set), null (clear), or undefined (don't touch)
         // console.log(`Actual Hours (Sum): ${fieldValue10065}`);
 
         if (["Activity"].includes(type)) {
@@ -2471,42 +2524,66 @@ export async function updateKPI(event, context) {
           DFSValue = null;
           console.log("CASE 1---> Type: ", type, "--- Value:", DFSValue);
         } else if (["Activity Group"].includes(type)) {
-          // For Activity Group: use its own standard hours (customfield_10061)
-          const standardHrs = fieldValue10061;
-          const actualHrs = fieldValue10093;
+          // OPTION C gate:
+          // (1) cheap in-memory check — only proceed if the AG's OWN status is Closed.
+          //     This skips the expensive descendant walk on every activity-close event;
+          //     the walk now runs ONLY when the user actually closes the AG.
+          // (2) then confirm ALL descendants are closed via areAllDescendantsClosed.
+          const agIsClosed = issueStatus === "Closed";
+          const allClosed = agIsClosed
+            ? await areAllDescendantsClosed(issueData.key)
+            : false;
 
-          if (standardHrs !== 0 && standardHrs !== null) {
-            if (actualHrs === null || actualHrs === 0) {
-              DFSValue = null; // If actual hours are 0 or null, set DFS% to null
-            } else if (actualHrs === standardHrs) {
-              DFSValue = 0;
-            } else if (actualHrs !== 0) {
-              DFSValue = Number(
-                (((actualHrs - standardHrs) / standardHrs) * 100).toFixed(1),
-              );
+          if (allClosed) {
+            // Q3=A: when all closed, Close Std Hrs (10971) == Total Standard Hrs (10061)
+            // Compute in-memory and use it immediately as the denominator (no read-back -> no race)
+            // All descendants closed -> the full plan is now the closed standard (Q3=A)
+            const totalStdHrs = fieldValue10061;
+            const closeStdHrs = totalStdHrs; // Close Std Hrs == Total Std Hrs at all-closed
+            const actualHrs = fieldValue10093;
+
+            // Remember the snapshot so we can persist 10971 in the main update payload (Step 3)
+            agCloseStdHrsToSet = closeStdHrs;
+
+            if (closeStdHrs !== 0 && closeStdHrs !== null) {
+              if (actualHrs === null || actualHrs === 0) {
+                DFSValue = null;
+              } else if (actualHrs === closeStdHrs) {
+                DFSValue = 0;
+              } else if (actualHrs !== 0) {
+                DFSValue = Number(
+                  (((actualHrs - closeStdHrs) / closeStdHrs) * 100).toFixed(1),
+                );
+              }
+            } else {
+              DFSValue = null;
             }
-          } else {
-            DFSValue = null;
-          }
 
-          console.log(
-            `CASE 2.1---> Type: ${type} | Actual: ${actualHrs}, Std: ${standardHrs}, DFS: ${DFSValue}`,
-          );
+            console.log(
+              `CASE 2.1 [ALL CLOSED]---> Type: ${type} | Actual: ${actualHrs}, CloseStd: ${closeStdHrs}, DFS: ${DFSValue}`,
+            );
+          } else {
+            // Two-way reset (Q2=A): not all closed -> clear DFS and 10971
+            DFSValue = null;
+            agCloseStdHrsToSet = null;
+            console.log(
+              `CASE 2.1 [NOT ALL CLOSED]---> Type: ${type} | DFS + 10971 reset to null`,
+            );
+          }
         } else if (["Project", "Phase"].includes(type)) {
           // For Project/Phase: use propagated Close Std Hrs (customfield_10971)
-          // const standardHrs = fieldValue10971;
-          // For Project/Phase: use propagated Standard Hours Tot(customfield_10061)
-          const standardHrs = fieldValue10061;
+          // 10971 rolls up from Activity Groups that are fully closed (Step 4 propagation)
+          const closeStdHrs = fieldValue10971;
           const actualHrs = fieldValue10093;
 
-          if (standardHrs !== 0 && standardHrs !== null) {
+          if (closeStdHrs !== 0 && closeStdHrs !== null) {
             if (actualHrs === null || actualHrs === 0) {
               DFSValue = null; // If actual hours are 0 or null, set DFS% to null
-            } else if (actualHrs === standardHrs) {
+            } else if (actualHrs === closeStdHrs) {
               DFSValue = 0;
             } else if (actualHrs !== 0) {
               DFSValue = Number(
-                (((actualHrs - standardHrs) / standardHrs) * 100).toFixed(1),
+                (((actualHrs - closeStdHrs) / closeStdHrs) * 100).toFixed(1),
               );
             }
           } else {
@@ -2514,7 +2591,7 @@ export async function updateKPI(event, context) {
           }
 
           console.log(
-            `CASE 2.2---> Type: ${type} | Actual: ${actualHrs}, Std: ${standardHrs}, DFS: ${DFSValue}`,
+            `CASE 2.2---> Type: ${type} | Actual: ${actualHrs}, CloseStd: ${closeStdHrs}, DFS: ${DFSValue}`,
           );
         } else {
           DFSValue = null;
@@ -2552,6 +2629,12 @@ export async function updateKPI(event, context) {
                 [customField10065]: Number(fieldValue10065?.toFixed(1)) || null,
                 // [customField10066]: ["Activity", "Activity Group"].includes(type) ? (issueStatus === "Closed" ? (Number(DFSValue ?.toFixed(1)) || 0) : null ) : null,   // changed from null to 0
                 [customField10066]: DFSValue,
+                // Persist the AG's Close Std Hrs snapshot decided in CASE 2.1.
+                // undefined -> spread nothing (non-AG issues leave 10971 untouched);
+                // number -> set it; null -> clear it (two-way reset).
+                ...(agCloseStdHrsToSet !== undefined && {
+                  [customField10971]: agCloseStdHrsToSet,
+                }),
                 [customField10086]: Number(reWorkValue?.toFixed(1)) || null,
                 [customField10070]: Number(extraWorkValue?.toFixed(1)) || null,
                 [customField10068]: Number(
@@ -2596,6 +2679,10 @@ export async function updateKPI(event, context) {
               customField11036,
             ]);
             await propagateIterCount(parentIssueId, [customField10607]);
+            // Roll the AG's Close Std Hrs (10971) snapshot up to Phase, then Project.
+            // Only fires on AG updates, so it sums sibling AGs into the Phase -
+            // it never pulls 10971 from an AG's own Activity children (which have none).
+            await propagateActivityHoursBulk(parentIssueId, [customField10971]);
           }
           // await propagateActivityHours(parentIssueId, customField10084);,
           // await propagateActivityHours(parentIssueId, customField10085);
@@ -3167,9 +3254,9 @@ export async function updateKPI(event, context) {
       } catch (error) {
         console.error(
           "Error in updateKPI Event Listener: ",
-          error.response.status,
+          error?.response?.status,
           " --- ",
-          error.message,
+          error?.message,
         );
       }
 
