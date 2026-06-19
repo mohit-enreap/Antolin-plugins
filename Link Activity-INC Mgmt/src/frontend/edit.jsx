@@ -36,6 +36,7 @@ const Edit = () => {
     { label: "MUA INFORMAL (Extra Work)", value: "MUA INFORMAL (Extra Work)" },
     { label: "SW & HW", value: "SW & HW" },
     { label: "RESOURCES", value: "RESOURCES" },
+    { label: "DELAY IN DELIVERY", value: "DELAY IN DELIVERY" },
   ];
 
   const showActivity = (incident) =>
