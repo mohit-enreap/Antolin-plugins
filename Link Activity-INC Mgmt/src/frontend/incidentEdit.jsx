@@ -72,11 +72,16 @@ const Edit = () => {
 
   // Key-based JQL: match incidents linked to the Project work-item KEY (stable),
   // filtered by the incident's "Incident type" field, grouped by nature.
+  // Incident project is derived from the activity's project key:
+  //   CWO-...   -> production incidents in INC
+  //   CTEST-... -> test incidents in INCENC
   const buildIncidentJQL = (projKey, nature) => {
     const types = incidentTypesForNature(nature)
       .map((t) => `"${t}"`)
       .join(", ");
-    return `"type" = Incident AND issue in linkedIssues("${projKey}") AND "Incident type" in (${types}) AND Project = INCENC ORDER BY key ASC`;
+    const incidentProject =
+      projKey && projKey.startsWith("CTEST") ? "INCENC" : "INC";
+    return `"type" = Incident AND issue in linkedIssues("${projKey}") AND "Incident type" in (${types}) AND Project = ${incidentProject} ORDER BY key ASC`;
   };
 
   const fetchIncidents = async (projKey, nature) => {
