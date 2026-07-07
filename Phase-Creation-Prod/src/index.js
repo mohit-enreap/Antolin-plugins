@@ -1960,7 +1960,7 @@ export async function enqueueUpdateLog(event, context) {
 
   console.log(projectKey);
 
-  if (projectKey === "CWO") {
+  if (projectKey === "CTEST") {
     // Dev --> CDEMO // Prod --> CWO // Staging --> CTEST
     let retryCount = 0;
     let success = false;
@@ -3356,9 +3356,9 @@ export async function updateIssuesDateField(jql, dateFieldId) {
 export async function updateToday(context) {
   console.log("Scheduled trigger invoked 1");
   console.log(context);
-  const rawJql = `project in ( CWO) AND issuetype in (Activity, "Work Order", Task) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`;
+  // const rawJql = `project in ( CWO) AND issuetype in (Activity, "Work Order", Task) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`;
   // const rawJql = `project in (CDEMO) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`;
-  // const rawJql = `project in (CTEST) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`;
+  const rawJql = `project in (CTEST) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`;
 
   await updateIssuesDateField(rawJql, "customfield_11168");
 }
