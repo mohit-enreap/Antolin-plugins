@@ -3485,8 +3485,76 @@ resolver.define("saveQuotationData", async ({ payload }) => {
 });
 
 // ─── QUOTATION COMPARE (Stage 1) — additive only, modifies no existing logic ───
-resolver.define("compareQuotationPing", async () => {
-  return { ok: true, message: "compareQuotation resolver alive" };
+// Step 2: headless read. Walk project -> phases -> Activity Groups.
+// Uses its OWN filtered link fetch (outward + WBSGantt only) so incidents/other
+// links are excluded. fetchLinkedIssues (shared) is left untouched.
+async function fetchWbsChildren(issueKey) {
+  const res = await api
+    .asApp()
+    .requestJira(route`/rest/api/3/issue/${issueKey}?fields=issuelinks`);
+  const data = await res.json();
+  const links = data.fields.issuelinks || [];
+  return links
+    .filter(
+      (link) =>
+        link.type.name === "Hierarchy link (WBSGantt)" && link.outwardIssue,
+    )
+    .map((link) => ({
+      key: link.outwardIssue.key,
+      summary: link.outwardIssue.fields.summary,
+    }));
+}
+
+resolver.define("compareQuotation", async ({ payload }) => {
+  const { issue } = payload;
+  const projectKey = issue.key;
+  console.log(`[compare] START project=${projectKey}`);
+
+  // 1) project -> phases (outward WBSGantt children only)
+  const phases = await fetchWbsChildren(projectKey);
+  console.log(
+    `[compare] phases found: ${phases.length}`,
+    phases.map((p) => p.summary),
+  );
+
+  const result = [];
+
+  for (const phase of phases) {
+    // 2) phase -> its Activity Groups (same filter)
+    const ags = await fetchWbsChildren(phase.key);
+    console.log(
+      `[compare] phase "${phase.summary}" (${phase.key}) -> ${ags.length} AGs`,
+    );
+
+    const agRows = [];
+    for (const ag of ags) {
+      const res = await api
+        .asApp()
+        .requestJira(
+          route`/rest/api/3/issue/${ag.key}?fields=summary,status,customfield_10061`,
+        );
+      const data = await res.json();
+      const row = {
+        key: ag.key,
+        summary: data.fields.summary,
+        status: data.fields.status?.name || null,
+        currentStd: data.fields.customfield_10061 ?? null,
+      };
+      agRows.push(row);
+      console.log(
+        `[compare]   AG ${row.key} | "${row.summary}" | ${row.status} | std=${row.currentStd}`,
+      );
+    }
+
+    result.push({
+      phaseKey: phase.key,
+      phaseSummary: phase.summary,
+      ags: agRows,
+    });
+  }
+
+  console.log(`[compare] DONE project=${projectKey}, phases=${result.length}`);
+  return { ok: true, projectKey, phases: result };
 });
 
 export const handler = resolver.getDefinitions();
