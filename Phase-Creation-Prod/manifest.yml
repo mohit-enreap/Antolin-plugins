@@ -53,6 +53,17 @@ modules:
         function: resolver
       viewportSize: max
       title: Create Quotation
+    - key: quotation-compare-action
+      resource: quotationCompare
+      displayConditions:
+        and:
+          issueType: Project
+          projectKey: "CTEST"
+          jiraExpression: user.getProjectRoles(project).some(p => p.name == "Administrators")
+      resolver:
+        function: resolver
+      viewportSize: max
+      title: Compare Quotation
 
   jira:projectSettingsPage:
     - key: project-settings-page
@@ -154,6 +165,8 @@ resources:
     path: static/phase-setting/build
   - key: quotation
     path: static/quotation/build
+  - key: quotationCompare
+    path: static/quotation-compare/build
 permissions:
   content:
     styles:

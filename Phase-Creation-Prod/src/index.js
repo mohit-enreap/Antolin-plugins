@@ -3483,5 +3483,11 @@ resolver.define("saveQuotationData", async ({ payload }) => {
   await storage.set(`Quot_${product}_${customer}_${issue}`, data);
   return { success: true };
 });
+
+// ─── QUOTATION COMPARE (Stage 1) — additive only, modifies no existing logic ───
+resolver.define("compareQuotationPing", async () => {
+  return { ok: true, message: "compareQuotation resolver alive" };
+});
+
 export const handler = resolver.getDefinitions();
 export const handler1 = resolver1.getDefinitions();
