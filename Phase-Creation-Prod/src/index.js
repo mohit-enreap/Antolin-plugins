@@ -3554,6 +3554,7 @@ async function cookActivitiesTemp(productKey, phase, productParts, customer) {
   }
 
   // pass 3: Data Management (diagnostic-guarded)
+
   const _dmCustomers = data["Data Management"]?.customers?.[productKey];
   const _dmTime = _dmCustomers?.[customer] ?? _dmCustomers?.["Standard"];
   const _dmPct = data["Data Management"]?.percentages;
