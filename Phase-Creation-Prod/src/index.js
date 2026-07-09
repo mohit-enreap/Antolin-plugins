@@ -3485,9 +3485,7 @@ resolver.define("saveQuotationData", async ({ payload }) => {
 });
 
 // ─── QUOTATION COMPARE (Stage 1) — additive only, modifies no existing logic ───
-// Step 2: headless read. Walk project -> phases -> Activity Groups.
-// Uses its OWN filtered link fetch (outward + WBSGantt only) so incidents/other
-// links are excluded. fetchLinkedIssues (shared) is left untouched.
+
 async function fetchWbsChildren(issueKey) {
   const res = await api
     .asApp()
@@ -3505,27 +3503,131 @@ async function fetchWbsChildren(issueKey) {
     }));
 }
 
+// TEMPORARY (Step 3): faithful replay of getConfigData's activity-branch cook.
+// Re-parses the blob fresh per call because processJsonWithPhase mutates in place.
+// Removed in Step 7 when we extract the shared cookActivities from getConfigData.
+async function cookActivitiesTemp(productKey, phase, productParts, customer) {
+  const base64String = await storage.get(STORAGE_KEY);
+  const uint8Arr = base64ToUint8Array(base64String);
+  const decompressedString = pako.inflate(uint8Arr, { to: "string" });
+  const data = JSON.parse(decompressedString); // fresh parse each call
+
+  console.log(
+    `[compare] cook key="${productKey}" phase="${phase}" part0="${productParts[0]}" customer="${customer}"`,
+  );
+
+  if (!data[productKey]) {
+    console.log(
+      `[compare] cook: key "${productKey}" NOT in blob. top keys=${Object.keys(data).slice(0, 20)}`,
+    );
+    return {};
+  }
+  if (productKey.includes("- CAE")) return data[productKey].activities;
+
+  // pass 1: phase multiply + sum selected parts
+  let cooked = calculateSumsWithTotal(
+    processJsonWithPhase(data[productKey].activities, phase),
+    productParts,
+  );
+
+  // pass 2: 2D Drawing (diagnostic-guarded)
+  const _2DDrawing = data["2D Drawing"]?.activities?.[productKey];
+  const _2DPct = data["2D Drawing"]?.percentages;
+  console.log(
+    `[compare]   2D: drawing defined=${!!_2DDrawing}, pct defined=${!!_2DPct}, pct[phase]=${_2DPct?.[phase]}`,
+  );
+  if (_2DDrawing && _2DPct) {
+    cooked = calculateSumsWithTotal(
+      update2DDrawingData(
+        data[productKey].activities,
+        _2DDrawing,
+        productParts,
+        _2DPct,
+        phase,
+      ),
+      productParts,
+    );
+  } else {
+    console.log(
+      `[compare]   2D: SKIPPED (missing input) — differs from getConfigData!`,
+    );
+  }
+
+  // pass 3: Data Management (diagnostic-guarded)
+  const _dmCustomers = data["Data Management"]?.customers?.[productKey];
+  const _dmTime = _dmCustomers?.[customer] ?? _dmCustomers?.["Standard"];
+  const _dmPct = data["Data Management"]?.percentages;
+  console.log(
+    `[compare]   DM: customers[key] defined=${!!_dmCustomers}, time=${_dmTime}, pct[phase]=${_dmPct?.[phase]}`,
+  );
+  if (_dmTime !== undefined && _dmPct) {
+    cooked = calculateSumsWithTotal(
+      updateDataManagement(
+        data[productKey].activities,
+        _dmTime,
+        productParts,
+        _dmPct,
+        phase,
+      ),
+      productParts,
+    );
+  } else {
+    console.log(
+      `[compare]   DM: SKIPPED (missing input) — differs from getConfigData!`,
+    );
+  }
+
+  cooked._diag = {
+    phase,
+    part0: productParts[0],
+    customer,
+    twoD_drawingDefined: !!_2DDrawing,
+    twoD_pctPhase: _2DPct?.[phase],
+    dm_customersDefined: !!_dmCustomers,
+    dm_time: _dmTime,
+    dm_pctPhase: _dmPct?.[phase],
+  };
+  return cooked;
+}
+
 resolver.define("compareQuotation", async ({ payload }) => {
   const { issue } = payload;
   const projectKey = issue.key;
-  console.log(`[compare] START project=${projectKey}`);
 
-  // 1) project -> phases (outward WBSGantt children only)
-  const phases = await fetchWbsChildren(projectKey);
+  // Step 3: cook config. Calibration = current key; swap to new key after it matches.
+  // const COOK_KEY = "Centre Console"; // ← calibration. Swap to "Centre Console New" after match.
+  const COOK_KEY = "Centre Console New"; // ← the revised quotation (id 31)
+
+  // read project product parts + customer (drive the cook)
+  const projRes = await api
+    .asApp()
+    .requestJira(
+      route`/rest/api/3/issue/${projectKey}?fields=customfield_10074,customfield_10838,customfield_10073`,
+    );
+  const projFields = (await projRes.json()).fields;
+  const productParts = (projFields.customfield_10074 || []).map((e) => e.value);
+  const customer = projFields.customfield_10838?.value;
   console.log(
-    `[compare] phases found: ${phases.length}`,
-    phases.map((p) => p.summary),
+    `[compare] COOK project=${projectKey} key="${COOK_KEY}" customer="${customer}" parts=${productParts.length}`,
   );
 
+  const phases = await fetchWbsChildren(projectKey);
   const result = [];
 
   for (const phase of phases) {
-    // 2) phase -> its Activity Groups (same filter)
-    const ags = await fetchWbsChildren(phase.key);
-    console.log(
-      `[compare] phase "${phase.summary}" (${phase.key}) -> ${ags.length} AGs`,
-    );
+    const phaseName = phase.summary.replace(/^\d+\s*/, "").trim();
 
+    // cook the NEW quotation for this phase
+    const cooked = await cookActivitiesTemp(
+      COOK_KEY,
+      phaseName,
+      productParts,
+      customer,
+    );
+    delete cooked._diag; // drop the diagnostic key so it isn't treated as an activity
+
+    // read live AGs for this phase (key, summary, status, current std)
+    const ags = await fetchWbsChildren(phase.key);
     const agRows = [];
     for (const ag of ags) {
       const res = await api
@@ -3533,28 +3635,95 @@ resolver.define("compareQuotation", async ({ payload }) => {
         .requestJira(
           route`/rest/api/3/issue/${ag.key}?fields=summary,status,customfield_10061`,
         );
-      const data = await res.json();
-      const row = {
+      const f = (await res.json()).fields;
+      agRows.push({
         key: ag.key,
-        summary: data.fields.summary,
-        status: data.fields.status?.name || null,
-        currentStd: data.fields.customfield_10061 ?? null,
-      };
-      agRows.push(row);
-      console.log(
-        `[compare]   AG ${row.key} | "${row.summary}" | ${row.status} | std=${row.currentStd}`,
-      );
+        summary: f.summary,
+        status: f.status?.name || null,
+        currentStd: f.customfield_10061 ?? null,
+      });
     }
 
-    result.push({
-      phaseKey: phase.key,
-      phaseSummary: phase.summary,
-      ags: agRows,
+    // --- JOIN + VERDICT ---
+    // normalize a summary to a comparable activity key:
+    // strip leading "Group N |", collapse whitespace around pipes, lowercase
+    const norm = (s) =>
+      s
+        .replace(/^Group\s+\S+\s*\|/, "") // drop "Group 102 |"
+        .split("|")
+        .map((p) => p.trim())
+        .join(" | ")
+        .toLowerCase();
+
+    // build lookup of cooked activities by normalized key
+    const cookedByNorm = {};
+    Object.entries(cooked).forEach(([actKey, v]) => {
+      cookedByNorm[norm(actKey)] = { actKey, newStd: v.standard };
     });
+
+    const round1 = (n) =>
+      n === null || n === undefined ? null : Number(Number(n).toFixed(1));
+    const matchedCookedKeys = new Set();
+    const verdicts = [];
+
+    for (const ag of agRows) {
+      const key = norm(ag.summary);
+      const hit = cookedByNorm[key];
+      const isClosed = ag.status === "Closed";
+      const cur = round1(ag.currentStd);
+
+      if (!hit) {
+        verdicts.push({
+          ...ag,
+          newStd: null,
+          verdict: "ORPHAN (no cooked match)",
+        });
+        continue;
+      }
+      matchedCookedKeys.add(key);
+      const nw = round1(hit.newStd);
+
+      let verdict;
+      if (isClosed) {
+        verdict = "LOCKED (closed — skip)";
+      } else if (nw === cur) {
+        verdict = "SAME";
+      } else if (nw === 0) {
+        verdict = "REMOVE -> 0";
+      } else {
+        verdict = "CHANGE";
+      }
+      verdicts.push({ ...ag, currentStd: cur, newStd: nw, verdict });
+    }
+
+    // cooked activities with NO matching AG = ADD candidates
+    const added = [];
+    Object.entries(cookedByNorm).forEach(([k, { actKey, newStd }]) => {
+      if (!matchedCookedKeys.has(k) && round1(newStd) > 0) {
+        added.push({
+          actKey,
+          newStd: round1(newStd),
+          verdict: "ADD (no AG yet)",
+        });
+      }
+    });
+
+    // concise log of decisions for this phase
+    console.log(`[compare] === ${phase.summary} verdicts ===`);
+    verdicts.forEach((v) =>
+      console.log(
+        `[compare]   ${v.verdict} | "${v.summary}" | cur=${v.currentStd} new=${v.newStd} | ${v.status}`,
+      ),
+    );
+    added.forEach((a) =>
+      console.log(`[compare]   ${a.verdict} | "${a.actKey}" | new=${a.newStd}`),
+    );
+
+    result.push({ phase: phase.summary, verdicts, added });
   }
 
-  console.log(`[compare] DONE project=${projectKey}, phases=${result.length}`);
-  return { ok: true, projectKey, phases: result };
+  console.log(`[compare] COOK DONE`);
+  return { ok: true, projectKey, cookKey: COOK_KEY, result };
 });
 
 export const handler = resolver.getDefinitions();
