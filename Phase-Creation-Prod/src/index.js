@@ -3591,15 +3591,57 @@ async function cookActivitiesTemp(productKey, phase, productParts, customer) {
   return cooked;
 }
 
+// Returns the list of pickable quotation product keys (excludes internal sections).
+resolver.define("listQuotations", async () => {
+  const base64String = await storage.get(STORAGE_KEY);
+  const uint8Arr = base64ToUint8Array(base64String);
+  const decompressedString = pako.inflate(uint8Arr, { to: "string" });
+  const data = JSON.parse(decompressedString);
+
+  // Pickable products (CAD, - PS, and - CAE) all share the product shape:
+  // an `activities` object plus an `id`. Internal sections
+  // (Reporting Manager, Milestone, Data Management, "2D DELIVERABLES",
+  // "2D Drawing", Industrialization) lack that combo and are excluded by shape.
+  // These three sections carry a product-like shape (.activities + id) but are
+  // NOT pickable products, so exclude them by name in addition to the shape test.
+  const SECTION_EXCLUDE = new Set([
+    "2D Drawing",
+    "2D DELIVERABLES",
+    "Data Management",
+    "Industrialization",
+    "Reporting Manager",
+    "Milestone",
+  ]);
+  const keys = Object.keys(data).filter((k) => {
+    if (SECTION_EXCLUDE.has(k)) return false;
+    const entry = data[k];
+    return (
+      entry &&
+      typeof entry === "object" &&
+      entry.activities &&
+      typeof entry.activities === "object" &&
+      "id" in entry
+    );
+  });
+
+  const dropped = Object.keys(data).filter((k) => !keys.includes(k));
+  console.log(`[compare] listQuotations kept ${keys.length}:`, keys);
+  console.log(`[compare] listQuotations dropped:`, dropped);
+
+  return { keys };
+});
+
+// TEMPORARY revision resolver — naming convention only.
+// Replace this ONE function when Sayan's V1/V2 versioning lands.
+function resolveNewRevisionKey(currentProductKey) {
+  return `${currentProductKey} New`;
+}
+
 resolver.define("compareQuotation", async ({ payload }) => {
   const { issue } = payload;
   const projectKey = issue.key;
 
-  // Step 3: cook config. Calibration = current key; swap to new key after it matches.
-  // const COOK_KEY = "Centre Console"; // ← calibration. Swap to "Centre Console New" after match.
-  const COOK_KEY = "Centre Console New"; // ← the revised quotation (id 31)
-
-  // read project product parts + customer (drive the cook)
+  // read project product parts + customer + current product (drive the cook)
   const projRes = await api
     .asApp()
     .requestJira(
@@ -3608,8 +3650,34 @@ resolver.define("compareQuotation", async ({ payload }) => {
   const projFields = (await projRes.json()).fields;
   const productParts = (projFields.customfield_10074 || []).map((e) => e.value);
   const customer = projFields.customfield_10838?.value;
+
+  // Reading A: the project owns its product; the NEW side is a revision of that same product.
+  const currentProductKey = projFields.customfield_10073?.value;
+  if (!currentProductKey) {
+    return {
+      ok: false,
+      error: "NO_PRODUCT",
+      message: "This project has no Product-BU set.",
+    };
+  }
+  const COOK_KEY = resolveNewRevisionKey(currentProductKey); // "X New" for now; swap when versioning lands
+
+  // guard: does the NEW revision actually exist in the blob?
+  const base64String = await storage.get(STORAGE_KEY);
+  const blob = JSON.parse(
+    pako.inflate(base64ToUint8Array(base64String), { to: "string" }),
+  );
+  if (!blob[COOK_KEY]) {
+    return {
+      ok: false,
+      error: "NO_NEW_REVISION",
+      message: `No newer revision available for "${currentProductKey}".`,
+      currentProduct: currentProductKey,
+    };
+  }
+
   console.log(
-    `[compare] COOK project=${projectKey} key="${COOK_KEY}" customer="${customer}" parts=${productParts.length}`,
+    `[compare] COOK project=${projectKey} current="${currentProductKey}" new="${COOK_KEY}" customer="${customer}" parts=${productParts.length}`,
   );
 
   const phases = await fetchWbsChildren(projectKey);
@@ -3625,7 +3693,8 @@ resolver.define("compareQuotation", async ({ payload }) => {
       productParts,
       customer,
     );
-    delete cooked._diag; // drop the diagnostic key so it isn't treated as an activity
+    const cookDiag = cooked._diag || null; // keep the defined-flags for the safeguard
+    delete cooked._diag; // drop it so it isn't treated as an activity
 
     // read live AGs for this phase (key, summary, status, current std)
     const ags = await fetchWbsChildren(phase.key);
@@ -3694,7 +3763,27 @@ resolver.define("compareQuotation", async ({ payload }) => {
       } else {
         verdict = "CHANGE";
       }
-      verdicts.push({ ...ag, currentStd: cur, newStd: nw, verdict });
+      // safeguard: a 0 caused by a MISSING cook section (2D/DM not configured for this key)
+      // is suspect, not a real de-scope. Flag it so the UI can warn.
+      const isDrawingRow = ag.summary.includes("2D DELIVERABLES");
+      const isDataMgmtRow = ag.summary.includes("DATA MANAGEMENT");
+      let flag = null;
+      if (nw === 0 && !isClosed) {
+        if (
+          isDrawingRow &&
+          cookDiag &&
+          cookDiag.twoD_drawingDefined === false
+        ) {
+          flag = "MISSING_2D_CONFIG";
+        } else if (
+          isDataMgmtRow &&
+          cookDiag &&
+          cookDiag.dm_customersDefined === false
+        ) {
+          flag = "MISSING_DM_CONFIG";
+        }
+      }
+      verdicts.push({ ...ag, currentStd: cur, newStd: nw, verdict, flag });
     }
 
     // cooked activities with NO matching AG = ADD candidates
@@ -3724,7 +3813,13 @@ resolver.define("compareQuotation", async ({ payload }) => {
   }
 
   console.log(`[compare] COOK DONE`);
-  return { ok: true, projectKey, cookKey: COOK_KEY, result };
+  return {
+    ok: true,
+    projectKey,
+    currentProduct: currentProductKey,
+    newProduct: COOK_KEY,
+    result,
+  };
 });
 
 export const handler = resolver.getDefinitions();

@@ -11,11 +11,20 @@ function App() {
         const issue = context.extension.issue; // { key: "CTEST-1367", ... }
         console.log("[compare] context issue:", issue);
 
-        const data = await invoke("compareQuotation", { issue }); // pass it as payload
-        console.log("[compare] resolver result:", data); // full tree in browser console
+        // TEMP TEST 2 — list pickable quotation keys
+        invoke("listQuotations").then((r) =>
+          console.log("[compare] listQuotations:", r),
+        );
+
+        // TEMP TEST 3 — force a specific key to prove cookKey drives the cook
+        const data = await invoke("compareQuotation", {
+          issue,
+          cookKey: "Centre Console",
+        });
+        console.log("[compare] resolver result:", data);
 
         setStatus(
-          `Read ${data.phases.length} phase(s) — see console for details`,
+          `Compared — ${data.result?.length ?? 0} phase(s), see console`,
         );
       } catch (e) {
         console.error("[compare] error:", e);
