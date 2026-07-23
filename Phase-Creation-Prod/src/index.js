@@ -3506,7 +3506,19 @@ async function fetchWbsChildren(issueKey) {
 // TEMPORARY (Step 3): faithful replay of getConfigData's activity-branch cook.
 // Re-parses the blob fresh per call because processJsonWithPhase mutates in place.
 // Removed in Step 7 when we extract the shared cookActivities from getConfigData.
-async function cookActivitiesTemp(productKey, phase, productParts, customer) {
+// COMPATIBILITY SEAM (demo vs Sayan quotation):
+// `recipe` is the NEW-side product/quotation object ({ activities, id, ... }).
+// DEMO: caller passes blob[COOK_KEY]. REAL: caller passes the storage.get'd
+// Quot_WO_... object — SAME shape, so this cook is unchanged either way.
+// `productKey` is kept only for the CAE short-circuit + logging.
+async function cookActivitiesTemp(
+  recipe,
+  productKey,
+  phase,
+  productParts,
+  customer,
+) {
+  // still need the blob for the SHARED sections (2D Drawing, Data Management)
   const base64String = await storage.get(STORAGE_KEY);
   const uint8Arr = base64ToUint8Array(base64String);
   const decompressedString = pako.inflate(uint8Arr, { to: "string" });
@@ -3516,17 +3528,15 @@ async function cookActivitiesTemp(productKey, phase, productParts, customer) {
     `[compare] cook key="${productKey}" phase="${phase}" part0="${productParts[0]}" customer="${customer}"`,
   );
 
-  if (!data[productKey]) {
-    console.log(
-      `[compare] cook: key "${productKey}" NOT in blob. top keys=${Object.keys(data).slice(0, 20)}`,
-    );
+  if (!recipe || !recipe.activities) {
+    console.log(`[compare] cook: no recipe/activities for "${productKey}"`);
     return {};
   }
-  if (productKey.includes("- CAE")) return data[productKey].activities;
+  if (productKey.includes("- CAE")) return recipe.activities;
 
   // pass 1: phase multiply + sum selected parts
   let cooked = calculateSumsWithTotal(
-    processJsonWithPhase(data[productKey].activities, phase),
+    processJsonWithPhase(recipe.activities, phase),
     productParts,
   );
 
@@ -3539,7 +3549,7 @@ async function cookActivitiesTemp(productKey, phase, productParts, customer) {
   if (_2DDrawing && _2DPct) {
     cooked = calculateSumsWithTotal(
       update2DDrawingData(
-        data[productKey].activities,
+        recipe.activities,
         _2DDrawing,
         productParts,
         _2DPct,
@@ -3564,7 +3574,7 @@ async function cookActivitiesTemp(productKey, phase, productParts, customer) {
   if (_dmTime !== undefined && _dmPct) {
     cooked = calculateSumsWithTotal(
       updateDataManagement(
-        data[productKey].activities,
+        recipe.activities,
         _dmTime,
         productParts,
         _dmPct,
@@ -3631,8 +3641,20 @@ resolver.define("listQuotations", async () => {
   return { keys };
 });
 
-// TEMPORARY revision resolver — naming convention only.
-// Replace this ONE function when Sayan's V1/V2 versioning lands.
+// TEMPORARY revision resolver — naming convention only ("X New" in the blob).
+// DEMO ONLY: current hierarchy vs "Centre Console New". Sayan's stored-quotation
+// system is not deployed yet.
+//
+// REAL VERSION (swap this ONE function + getNewRevisionRecipe below when live):
+//   - parse issue customfield_11696 = "summary ## quotation ## version" (split " ## ")
+//   - family from Product-BU (10073): "- CAE"→CAE, "- PS"→PS, else CAD
+//   - baseKey = productBU.split(" -")[0]
+//   - key = `Quot_WO_${baseKey}_${customer}_${quotation}_${family}_${version}`
+//   - stored value is a RAW recipe (same .activities shape) → cook path unchanged
+//   - NEW-side 2D/DM must switch to "2D Drawing - Quotation" /
+//     "Data Management - Quotation" + projectType routing (Sayan getConfigData ~1962/1994)
+//   - PAIRING unresolved: 11696 holds the version BUILT from (V1); finding a NEWER
+//     one (V2+) needs storage enumeration or a user-picked version.
 function resolveNewRevisionKey(currentProductKey) {
   return `${currentProductKey} New`;
 }
@@ -3686,8 +3708,14 @@ resolver.define("compareQuotation", async ({ payload }) => {
   for (const phase of phases) {
     const phaseName = phase.summary.replace(/^\d+\s*/, "").trim();
 
+    // Fetch the NEW-side recipe. DEMO: from the blob under COOK_KEY.
+    // REAL: replace this one line with the Quot_WO_... storage.get (see
+    // resolveNewRevisionKey comment). Shape is identical, so the cook is unchanged.
+    const newRecipe = blob[COOK_KEY];
+
     // cook the NEW quotation for this phase
     const cooked = await cookActivitiesTemp(
+      newRecipe,
       COOK_KEY,
       phaseName,
       productParts,
