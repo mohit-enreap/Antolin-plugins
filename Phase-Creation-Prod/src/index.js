@@ -3784,6 +3784,11 @@ resolver.define("compareQuotation", async ({ payload }) => {
       let verdict;
       if (isClosed) {
         verdict = "LOCKED (closed — skip)";
+      } else if (cur === null) {
+        // AG exists but has no standard hours — the user set Standard Loop = 0
+        // at creation, so no Loop/WO/Task children were made and nothing rolled
+        // up. There is no baseline to compare against, so this is not a change.
+        verdict = "NOT PLANNED (no baseline)";
       } else if (nw === cur) {
         verdict = "SAME";
       } else if (nw === 0) {
