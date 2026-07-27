@@ -1,44 +1,509 @@
 import React, { useEffect, useState } from "react";
 import { invoke, view } from "@forge/bridge";
 
+/* ------------------------------------------------------------------ *
+ * Compare Quotation — Stage 1 (preview only, nothing is ever written) *
+ * ------------------------------------------------------------------ */
+
+const T = {
+  ink: "#172B4D",
+  body: "#44546F",
+  muted: "#626F86",
+  faint: "#8993A4",
+  line: "#DFE1E6",
+  hair: "#EBECF0",
+  canvas: "#F7F8F9",
+  surface: "#FFFFFF",
+  link: "#0C66E4",
+  linkDark: "#0055CC",
+  font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+};
+
+const VERDICT = {
+  CHANGE: { label: "Change", fg: "#0055CC", bg: "#E9F2FF", dot: "#0C66E4" },
+  REMOVE: { label: "Remove", fg: "#AE2E24", bg: "#FFECEB", dot: "#C9372C" },
+  SAME: { label: "Same", fg: "#216E4E", bg: "#DCFFF1", dot: "#22A06B" },
+  NOT_PLANNED: {
+    label: "Not planned",
+    fg: "#626F86",
+    bg: "#F1F2F4",
+    dot: "#B3B9C4",
+  },
+  LOCKED: { label: "Locked", fg: "#FFFFFF", bg: "#C9372C", dot: "#C9372C" },
+  ORPHAN: { label: "Orphan", fg: "#974F0C", bg: "#FFF7D6", dot: "#E56910" },
+  ADD: { label: "Add", fg: "#5E4DB2", bg: "#F3F0FF", dot: "#8270DB" },
+};
+
+const ORDER = [
+  "CHANGE",
+  "REMOVE",
+  "SAME",
+  "NOT_PLANNED",
+  "LOCKED",
+  "ORPHAN",
+  "ADD",
+];
+
+function classify(verdict) {
+  const v = String(verdict || "");
+  if (v.startsWith("LOCKED")) return "LOCKED";
+  if (v.startsWith("NOT PLANNED")) return "NOT_PLANNED";
+  if (v.startsWith("ORPHAN")) return "ORPHAN";
+  if (v.startsWith("ADD")) return "ADD";
+  if (v.startsWith("REMOVE")) return "REMOVE";
+  if (v === "SAME") return "SAME";
+  return "CHANGE";
+}
+
+/* "Group 102 | DATA PREPARATION  |  A surface analysis" */
+function parse(summary) {
+  const parts = String(summary || "")
+    .split("|")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return {
+    group: parts[0] || "",
+    section: parts.length > 2 ? parts[1] : "",
+    name: parts.length > 2 ? parts.slice(2).join(" | ") : parts[1] || "",
+  };
+}
+
+const hrs = (n) =>
+  n === null || n === undefined ? null : Number(n).toFixed(1);
+
+function Lozenge({ verdict, flagged }) {
+  const s = VERDICT[classify(verdict)] || VERDICT.CHANGE;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+      <span
+        title={verdict}
+        style={{
+          display: "inline-block",
+          padding: "2px 8px",
+          borderRadius: 3,
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: 0.3,
+          textTransform: "uppercase",
+          color: s.fg,
+          background: s.bg,
+          whiteSpace: "nowrap",
+        }}
+      >
+        {s.label}
+      </span>
+      {flagged ? <span title="Configuration may be incomplete">⚠️</span> : null}
+    </span>
+  );
+}
+
+function Chips({ verdicts }) {
+  const counts = {};
+  verdicts.forEach((v) => {
+    const k = classify(v.verdict);
+    counts[k] = (counts[k] || 0) + 1;
+  });
+  const present = ORDER.filter((k) => counts[k]);
+  if (!present.length) return null;
+  return (
+    <div
+      style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 14 }}
+    >
+      {present.map((k) => (
+        <span
+          key={k}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12,
+            color: T.body,
+          }}
+        >
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 8,
+              background: VERDICT[k].dot,
+            }}
+          />
+          <strong style={{ color: T.ink, fontWeight: 600 }}>{counts[k]}</strong>
+          {VERDICT[k].label.toLowerCase()}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+const TH = {
+  padding: "8px 12px",
+  fontSize: 11,
+  fontWeight: 700,
+  letterSpacing: 0.4,
+  textTransform: "uppercase",
+  color: T.faint,
+  borderBottom: `1px solid ${T.line}`,
+  background: T.canvas,
+  textAlign: "left",
+};
+const TD = {
+  padding: "9px 12px",
+  fontSize: 13,
+  color: T.ink,
+  borderBottom: `1px solid ${T.hair}`,
+  verticalAlign: "middle",
+};
+const NUM = {
+  ...TD,
+  textAlign: "right",
+  fontVariantNumeric: "tabular-nums",
+  whiteSpace: "nowrap",
+};
+
+function Table({ verdicts }) {
+  /* group consecutive rows under their WBS section */
+  const blocks = [];
+  verdicts.forEach((v) => {
+    const p = parse(v.summary);
+    const last = blocks[blocks.length - 1];
+    if (last && last.section === p.section) last.rows.push({ v, p });
+    else blocks.push({ section: p.section, rows: [{ v, p }] });
+  });
+
+  return (
+    <div
+      style={{
+        border: `1px solid ${T.line}`,
+        borderRadius: 6,
+        overflow: "hidden",
+        background: T.surface,
+      }}
+    >
+      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th style={{ ...TH, width: 84 }}>Group</th>
+            <th style={TH}>Activity</th>
+            <th style={{ ...TH, width: 108 }}>Status</th>
+            <th style={{ ...TH, width: 92, textAlign: "right" }}>Current</th>
+            <th style={{ ...TH, width: 92, textAlign: "right" }}>New</th>
+            <th style={{ ...TH, width: 132 }}>Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          {blocks.map((b, bi) => (
+            <React.Fragment key={`${b.section}-${bi}`}>
+              {b.section ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    style={{
+                      padding: "7px 12px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: 0.5,
+                      textTransform: "uppercase",
+                      color: T.muted,
+                      background: T.canvas,
+                      borderBottom: `1px solid ${T.hair}`,
+                      borderTop: `1px solid ${T.hair}`,
+                    }}
+                  >
+                    {b.section}
+                  </td>
+                </tr>
+              ) : null}
+              {b.rows.map(({ v, p }) => {
+                const cur = hrs(v.currentStd);
+                const nw = hrs(v.newStd);
+                const closed = v.status === "Closed";
+                return (
+                  <tr key={v.key} className="cq-row">
+                    <td style={{ ...TD, color: T.faint, whiteSpace: "nowrap" }}>
+                      {p.group.replace(/^Group\s*/i, "")}
+                    </td>
+                    <td style={TD}>{p.name}</td>
+                    <td
+                      style={{
+                        ...TD,
+                        fontSize: 12,
+                        color: closed ? T.ink : T.muted,
+                        fontWeight: closed ? 600 : 400,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {v.status || "—"}
+                    </td>
+                    <td
+                      style={{ ...NUM, color: cur === null ? T.faint : T.body }}
+                    >
+                      {cur === null ? "—" : cur}
+                    </td>
+                    <td style={{ ...NUM, fontWeight: 600 }}>
+                      {nw === null ? "—" : nw}
+                    </td>
+                    <td style={{ ...TD, whiteSpace: "nowrap" }}>
+                      <Lozenge verdict={v.verdict} flagged={Boolean(v.flag)} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function Added({ added }) {
+  if (!added || !added.length) return null;
+  return (
+    <div style={{ marginTop: 22 }}>
+      <p
+        style={{
+          margin: "0 0 8px",
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: 0.4,
+          textTransform: "uppercase",
+          color: T.faint,
+        }}
+      >
+        In the new quotation, not yet in the hierarchy
+      </p>
+      <div
+        style={{
+          border: `1px solid ${T.line}`,
+          borderRadius: 6,
+          overflow: "hidden",
+          background: T.surface,
+        }}
+      >
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <tbody>
+            {added.map((a) => (
+              <tr key={a.actKey} className="cq-row">
+                <td style={TD}>
+                  {String(a.actKey).replace(/\s*\|\s*/g, " | ")}
+                </td>
+                <td style={{ ...NUM, width: 92, fontWeight: 600 }}>
+                  {hrs(a.newStd)}
+                </td>
+                <td style={{ ...TD, width: 132, whiteSpace: "nowrap" }}>
+                  <Lozenge verdict={a.verdict} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 function App() {
-  const [status, setStatus] = useState("loading…");
+  const [issue, setIssue] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [tab, setTab] = useState(0);
 
   useEffect(() => {
     (async () => {
       try {
-        const context = await view.getContext(); // Forge tells us where we are
-        const issue = context.extension.issue; // { key: "CTEST-1367", ... }
-        console.log("[compare] context issue:", issue);
-
-        // TEMP TEST 2 — list pickable quotation keys
-        invoke("listQuotations").then((r) =>
-          console.log("[compare] listQuotations:", r),
-        );
-
-        // TEMP TEST 3 — force a specific key to prove cookKey drives the cook
-        const data = await invoke("compareQuotation", {
-          issue,
-          cookKey: "Centre Console",
-        });
-        console.log("[compare] resolver result:", data);
-
-        setStatus(
-          `Compared — ${data.result?.length ?? 0} phase(s), see console`,
-        );
+        const ctx = await view.getContext();
+        setIssue(ctx.extension.issue);
       } catch (e) {
-        console.error("[compare] error:", e);
-        setStatus("Error — see console");
+        setError("Could not read the project context. Reload the page.");
       }
     })();
   }, []);
 
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    setData(null);
+    setTab(0);
+    try {
+      const res = await invoke("compareQuotation", { issue });
+      if (!res || res.ok !== true) {
+        setError(
+          (res && (res.message || res.reason)) ||
+            "No newer quotation is available for this project.",
+        );
+      } else {
+        setData(res);
+      }
+    } catch (e) {
+      setError("The comparison could not be completed. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const phases = (data && data.result) || [];
+  const active = phases[tab];
+
   return (
-    <div className="p-4">
-      <p className="text-lg font-semibold text-blue-600 mb-2">
-        Compare Quotation — Step 2 (read)
-      </p>
-      <p>{status}</p>
+    <div
+      style={{
+        fontFamily: T.font,
+        color: T.ink,
+        background: T.canvas,
+        minHeight: "100%",
+        padding: "20px 16px 32px",
+      }}
+    >
+      <style>{`
+        .cq-row:hover { background: #F7F8F9; }
+        .cq-tab { appearance:none; border:0; background:transparent; cursor:pointer;
+          font: inherit; font-size:13px; padding:7px 14px; border-radius:5px; color:${T.body}; }
+        .cq-tab:hover { background:#EBECF0; }
+        .cq-tab[data-on="true"] { background:${T.surface}; color:${T.ink};
+          font-weight:600; box-shadow:0 1px 2px rgba(9,30,66,.16); }
+        .cq-btn { appearance:none; border:0; cursor:pointer; font:inherit; font-size:13px;
+          font-weight:600; color:#fff; background:${T.link}; padding:7px 16px; border-radius:5px; }
+        .cq-btn:hover:enabled { background:${T.linkDark}; }
+        .cq-btn:disabled { background:#DCDFE4; color:#8993A4; cursor:not-allowed; }
+        .cq-sel { font: inherit; font-size:13px; color:${T.ink}; background:${T.surface};
+          border:1px solid ${T.line}; border-radius:5px; padding:7px 10px; min-width:260px; }
+        :focus-visible { outline:2px solid ${T.link}; outline-offset:2px; }
+      `}</style>
+
+      <div style={{ maxWidth: 1080, margin: "0 auto" }}>
+        <h1 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
+          Compare quotation
+        </h1>
+        <p style={{ margin: "4px 0 0", fontSize: 13, color: T.muted }}>
+          Preview how this project's hours would change against a newer
+          quotation. Nothing is written.
+        </p>
+
+        {/* toolbar */}
+        <div
+          style={{
+            marginTop: 18,
+            padding: 16,
+            background: T.surface,
+            border: `1px solid ${T.line}`,
+            borderRadius: 6,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "flex-end",
+              gap: 12,
+            }}
+          >
+            <div>
+              <label
+                htmlFor="rev"
+                style={{
+                  display: "block",
+                  marginBottom: 5,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
+                  color: T.faint,
+                }}
+              >
+                Compare against
+              </label>
+              <select id="rev" className="cq-sel" defaultValue="latest">
+                <option value="latest">
+                  {data ? data.newProduct : "Latest revision"} (preview data)
+                </option>
+              </select>
+            </div>
+            <button className="cq-btn" onClick={run} disabled={busy || !issue}>
+              {busy ? "Comparing…" : "Compare"}
+            </button>
+          </div>
+          <p style={{ margin: "8px 0 0", fontSize: 12, color: T.faint }}>
+            Version selection arrives with the quotation system.
+          </p>
+        </div>
+
+        {error ? (
+          <div
+            style={{
+              marginTop: 16,
+              padding: "10px 14px",
+              fontSize: 13,
+              color: "#974F0C",
+              background: "#FFF7D6",
+              border: "1px solid #F5CD47",
+              borderRadius: 6,
+            }}
+          >
+            {error}
+          </div>
+        ) : null}
+
+        {data ? (
+          <div style={{ marginTop: 22 }}>
+            <p style={{ margin: "0 0 12px", fontSize: 13, color: T.body }}>
+              Comparing{" "}
+              <strong style={{ color: T.ink }}>{data.currentProduct}</strong>
+              <span style={{ margin: "0 7px", color: T.faint }}>→</span>
+              <strong style={{ color: T.ink }}>{data.newProduct}</strong>
+            </p>
+
+            <div
+              style={{
+                display: "inline-flex",
+                gap: 3,
+                padding: 3,
+                background: "#EBECF0",
+                borderRadius: 7,
+                marginBottom: 16,
+              }}
+            >
+              {phases.map((p, i) => (
+                <button
+                  key={p.phase}
+                  className="cq-tab"
+                  data-on={i === tab}
+                  onClick={() => setTab(i)}
+                >
+                  {p.phase}
+                </button>
+              ))}
+            </div>
+
+            {active ? (
+              <div>
+                {active.verdicts && active.verdicts.length ? (
+                  <>
+                    <Chips verdicts={active.verdicts} />
+                    <Table verdicts={active.verdicts} />
+                  </>
+                ) : (
+                  <div
+                    style={{
+                      padding: "28px 16px",
+                      textAlign: "center",
+                      fontSize: 13,
+                      color: T.muted,
+                      background: T.surface,
+                      border: `1px solid ${T.line}`,
+                      borderRadius: 6,
+                    }}
+                  >
+                    No activity groups in this phase.
+                  </div>
+                )}
+                <Added added={active.added} />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

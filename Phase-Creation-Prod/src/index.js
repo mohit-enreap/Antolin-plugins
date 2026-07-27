@@ -3517,6 +3517,7 @@ async function cookActivitiesTemp(
   phase,
   productParts,
   customer,
+  projectKey,
 ) {
   // still need the blob for the SHARED sections (2D Drawing, Data Management)
   const base64String = await storage.get(STORAGE_KEY);
@@ -3533,6 +3534,28 @@ async function cookActivitiesTemp(
     return {};
   }
   if (productKey.includes("- CAE")) return recipe.activities;
+
+  // Industrialization does not cook from the product recipe. Production
+  // (getConfigData ~1624) builds it from the per-project Proto/Serie snapshots
+  // written at phase creation, against the shared "Industrialization" section.
+  if (phase === "Industrialization") {
+    const proto = await storage.get(`${projectKey}_Industrialization_Proto`);
+    const serie = await storage.get(`${projectKey}_Industrialization_Serie`);
+    const ind = data["Industrialization"];
+    if (!ind || !ind.activities) {
+      console.log(`[compare] no Industrialization section in blob`);
+      return {};
+    }
+    // Percentages may be absent for this product. Production passes the
+    // lookup through and lets updateIndustrializationValues fall back to its
+    // 15/15/15 default, so hand over undefined rather than bailing out.
+    return updateIndustrializationValues(
+      proto,
+      serie,
+      JSON.parse(JSON.stringify(ind.activities)),
+      ind.percentages ? ind.percentages[productKey] : undefined,
+    );
+  }
 
   // pass 1: phase multiply + sum selected parts
   let cooked = calculateSumsWithTotal(
@@ -3720,6 +3743,7 @@ resolver.define("compareQuotation", async ({ payload }) => {
       phaseName,
       productParts,
       customer,
+      projectKey,
     );
     const cookDiag = cooked._diag || null; // keep the defined-flags for the safeguard
     delete cooked._diag; // drop it so it isn't treated as an activity
