@@ -16,6 +16,9 @@ const T = {
   surface: "#FFFFFF",
   link: "#0C66E4",
   linkDark: "#0055CC",
+  red: "#AE2E24",
+  violet: "#5E4DB2",
+  amber: "#974F0C",
   font: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
 };
 
@@ -44,6 +47,13 @@ const ORDER = [
   "ADD",
 ];
 
+/* the three role fields, in the order the quotation reads them */
+const ROLES = [
+  { label: "TDL", cur: "currentTDL", nw: "newTDL" },
+  { label: "COO", cur: "currentCOO", nw: "newCOO" },
+  { label: "DE", cur: "currentDE", nw: "newDE" },
+];
+
 function classify(verdict) {
   const v = String(verdict || "");
   if (v.startsWith("LOCKED")) return "LOCKED";
@@ -68,8 +78,28 @@ function parse(summary) {
   };
 }
 
-const hrs = (n) =>
-  n === null || n === undefined ? null : Number(n).toFixed(1);
+const isNum = (n) => n !== null && n !== undefined && !Number.isNaN(Number(n));
+const hrs = (n) => (isNum(n) ? Number(n).toFixed(1) : null);
+const r1 = (n) => (isNum(n) ? Number(Number(n).toFixed(1)) : null);
+
+/* sum of the role fields on one side; null when the side has no role data */
+function roleSum(row, side) {
+  let total = 0;
+  let any = false;
+  ROLES.forEach((role) => {
+    const v = row[role[side]];
+    if (isNum(v)) {
+      total += Number(v);
+      any = true;
+    }
+  });
+  return any ? r1(total) : null;
+}
+
+/* does this row have anything worth expanding? */
+function hasRoleData(row) {
+  return ROLES.some((role) => isNum(row[role.cur]) || isNum(row[role.nw]));
+}
 
 function Lozenge({ verdict, flagged }) {
   const s = VERDICT[classify(verdict)] || VERDICT.CHANGE;
@@ -161,7 +191,226 @@ const NUM = {
   whiteSpace: "nowrap",
 };
 
+/* ---- expanded role breakdown: one <tr> per role, aligned to the parent columns ---- */
+
+const DETAIL = {
+  padding: "6px 12px",
+  fontSize: 12,
+  background: T.canvas,
+  borderBottom: `1px solid ${T.hair}`,
+  color: T.body,
+  verticalAlign: "middle",
+};
+const DETAIL_NUM = {
+  ...DETAIL,
+  textAlign: "right",
+  fontVariantNumeric: "tabular-nums",
+  whiteSpace: "nowrap",
+};
+
+function Delta({ cur, nw }) {
+  const c = isNum(cur) ? Number(cur) : null;
+  const n = isNum(nw) ? Number(nw) : null;
+
+  if (c === null && n === null) return null;
+  if (c === null)
+    return (
+      <span style={{ color: T.violet, fontSize: 11, fontWeight: 600 }}>
+        not set before
+      </span>
+    );
+  if (n === null)
+    return (
+      <span style={{ color: T.amber, fontSize: 11, fontWeight: 600 }}>
+        not in new
+      </span>
+    );
+
+  const d = r1(n - c);
+  if (d === 0)
+    return <span style={{ color: T.faint, fontSize: 11 }}>no change</span>;
+  return (
+    <span
+      style={{
+        color: d > 0 ? T.linkDark : T.red,
+        fontSize: 11,
+        fontWeight: 600,
+        fontVariantNumeric: "tabular-nums",
+      }}
+    >
+      {d > 0 ? `+${d.toFixed(1)}` : d.toFixed(1)}
+    </span>
+  );
+}
+
+function DetailRows({ row }) {
+  const rows = ROLES.filter(
+    (role) => isNum(row[role.cur]) || isNum(row[role.nw]),
+  );
+
+  const curSum = roleSum(row, "cur");
+  const nwSum = roleSum(row, "nw");
+  const curStd = r1(row.currentStd);
+  const nwStd = r1(row.newStd);
+
+  /* the cook builds standard = TDL + COO + DE, so a mismatch means the
+     stored total and its parts disagree. 0.25 absorbs 1-decimal rounding. */
+  const curMismatch =
+    curSum !== null && curStd !== null && Math.abs(curSum - curStd) > 0.25;
+  const nwMismatch =
+    nwSum !== null && nwStd !== null && Math.abs(nwSum - nwStd) > 0.25;
+
+  const notes = [];
+  if (row.status === "Closed")
+    notes.push("This group is closed, so an overwrite will skip it.");
+  if (classify(row.verdict) === "ORPHAN")
+    notes.push("No matching activity was found in the new quotation.");
+  if (row.flag === "MISSING_2D_CONFIG")
+    notes.push(
+      "The new quotation has no 2D Drawing configuration for this product, so these hours read as zero.",
+    );
+  if (row.flag === "MISSING_DM_CONFIG")
+    notes.push(
+      "The new quotation has no Data Management configuration for this product, so these hours read as zero.",
+    );
+  if (curMismatch || nwMismatch)
+    notes.push("The roles below do not add up to the total on this row.");
+
+  const accent = { boxShadow: `inset 3px 0 0 ${T.line}` };
+
+  return (
+    <>
+      <tr>
+        <td style={{ ...DETAIL, ...accent }} />
+        <td
+          style={{
+            ...DETAIL,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 0.4,
+            textTransform: "uppercase",
+            color: T.faint,
+          }}
+        >
+          Hours by role
+        </td>
+        <td style={DETAIL} />
+        <td
+          style={{
+            ...DETAIL_NUM,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 0.4,
+            textTransform: "uppercase",
+            color: T.faint,
+          }}
+        >
+          Current
+        </td>
+        <td
+          style={{
+            ...DETAIL_NUM,
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: 0.4,
+            textTransform: "uppercase",
+            color: T.faint,
+          }}
+        >
+          New
+        </td>
+        <td style={DETAIL} />
+      </tr>
+
+      {rows.map((role) => {
+        const cur = row[role.cur];
+        const nw = row[role.nw];
+        const changed = !(isNum(cur) && isNum(nw)) || r1(cur) !== r1(nw);
+        return (
+          <tr key={role.label}>
+            <td style={{ ...DETAIL, ...accent }} />
+            <td style={{ ...DETAIL, color: T.body, fontWeight: 500 }}>
+              {role.label}
+            </td>
+            <td style={DETAIL} />
+            <td
+              style={{
+                ...DETAIL_NUM,
+                color: isNum(cur) ? T.body : T.faint,
+              }}
+            >
+              {isNum(cur) ? hrs(cur) : "—"}
+            </td>
+            <td
+              style={{
+                ...DETAIL_NUM,
+                color: T.ink,
+                fontWeight: changed ? 700 : 400,
+              }}
+            >
+              {isNum(nw) ? hrs(nw) : "—"}
+            </td>
+            <td style={DETAIL}>
+              <Delta cur={cur} nw={nw} />
+            </td>
+          </tr>
+        );
+      })}
+
+      <tr>
+        <td style={{ ...DETAIL, ...accent }} />
+        <td style={{ ...DETAIL, color: T.faint }}>Roles add up to</td>
+        <td style={DETAIL} />
+        <td
+          style={{
+            ...DETAIL_NUM,
+            color: curMismatch ? T.amber : T.faint,
+            fontWeight: curMismatch ? 700 : 400,
+          }}
+        >
+          {curSum === null ? "—" : curSum.toFixed(1)}
+        </td>
+        <td
+          style={{
+            ...DETAIL_NUM,
+            color: nwMismatch ? T.amber : T.faint,
+            fontWeight: nwMismatch ? 700 : 400,
+          }}
+        >
+          {nwSum === null ? "—" : nwSum.toFixed(1)}
+        </td>
+        <td style={DETAIL} />
+      </tr>
+
+      {notes.length ? (
+        <tr>
+          <td style={{ ...DETAIL, ...accent }} />
+          <td
+            colSpan={5}
+            style={{
+              ...DETAIL,
+              paddingTop: 2,
+              paddingBottom: 10,
+              fontSize: 12,
+              color: T.muted,
+            }}
+          >
+            {notes.map((n, i) => (
+              <div key={i} style={{ marginTop: i ? 3 : 0 }}>
+                {n}
+              </div>
+            ))}
+          </td>
+        </tr>
+      ) : null}
+    </>
+  );
+}
+
 function Table({ verdicts }) {
+  const [open, setOpen] = useState({});
+  const toggle = (key) => setOpen((o) => ({ ...o, [key]: !o[key] }));
+
   /* group consecutive rows under their WBS section */
   const blocks = [];
   verdicts.forEach((v) => {
@@ -183,7 +432,7 @@ function Table({ verdicts }) {
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th style={{ ...TH, width: 84 }}>Group</th>
+            <th style={{ ...TH, width: 92 }}>Group</th>
             <th style={TH}>Activity</th>
             <th style={{ ...TH, width: 108 }}>Status</th>
             <th style={{ ...TH, width: 92, textAlign: "right" }}>Current</th>
@@ -218,35 +467,76 @@ function Table({ verdicts }) {
                 const cur = hrs(v.currentStd);
                 const nw = hrs(v.newStd);
                 const closed = v.status === "Closed";
+                const expandable = hasRoleData(v);
+                const isOpen = Boolean(open[v.key]);
                 return (
-                  <tr key={v.key} className="cq-row">
-                    <td style={{ ...TD, color: T.faint, whiteSpace: "nowrap" }}>
-                      {p.group.replace(/^Group\s*/i, "")}
-                    </td>
-                    <td style={TD}>{p.name}</td>
-                    <td
-                      style={{
-                        ...TD,
-                        fontSize: 12,
-                        color: closed ? T.ink : T.muted,
-                        fontWeight: closed ? 600 : 400,
-                        whiteSpace: "nowrap",
-                      }}
+                  <React.Fragment key={v.key}>
+                    <tr
+                      className="cq-row"
+                      data-open={isOpen}
+                      onClick={expandable ? () => toggle(v.key) : undefined}
+                      style={expandable ? { cursor: "pointer" } : undefined}
                     >
-                      {v.status || "—"}
-                    </td>
-                    <td
-                      style={{ ...NUM, color: cur === null ? T.faint : T.body }}
-                    >
-                      {cur === null ? "—" : cur}
-                    </td>
-                    <td style={{ ...NUM, fontWeight: 600 }}>
-                      {nw === null ? "—" : nw}
-                    </td>
-                    <td style={{ ...TD, whiteSpace: "nowrap" }}>
-                      <Lozenge verdict={v.verdict} flagged={Boolean(v.flag)} />
-                    </td>
-                  </tr>
+                      <td
+                        style={{
+                          ...TD,
+                          color: T.faint,
+                          whiteSpace: "nowrap",
+                          paddingLeft: 8,
+                        }}
+                      >
+                        {expandable ? (
+                          <button
+                            className="cq-caret"
+                            data-open={isOpen}
+                            aria-expanded={isOpen}
+                            aria-label={`Hours by role for group ${p.group.replace(/^Group\s*/i, "")}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggle(v.key);
+                            }}
+                          >
+                            ▸
+                          </button>
+                        ) : (
+                          <span
+                            style={{ display: "inline-block", width: 20 }}
+                          />
+                        )}
+                        {p.group.replace(/^Group\s*/i, "")}
+                      </td>
+                      <td style={TD}>{p.name}</td>
+                      <td
+                        style={{
+                          ...TD,
+                          fontSize: 12,
+                          color: closed ? T.ink : T.muted,
+                          fontWeight: closed ? 600 : 400,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {v.status || "—"}
+                      </td>
+                      <td
+                        style={{
+                          ...NUM,
+                          color: cur === null ? T.faint : T.body,
+                        }}
+                      >
+                        {cur === null ? "—" : cur}
+                      </td>
+                      <td style={{ ...NUM, fontWeight: 600 }}>
+                        {nw === null ? "—" : nw}
+                      </td>
+                      <td style={{ ...TD, whiteSpace: "nowrap" }}>
+                        <Lozenge
+                          verdict={v.verdict}
+                          flagged={Boolean(v.flag)}
+                        />
+                      </td>
+                    </tr>
+                    {isOpen && expandable ? <DetailRows row={v} /> : null}
+                  </React.Fragment>
                 );
               })}
             </React.Fragment>
@@ -358,6 +648,13 @@ function App() {
     >
       <style>{`
         .cq-row:hover { background: #F7F8F9; }
+        .cq-row[data-open="true"] { background: #F1F2F4; }
+        .cq-caret { appearance:none; border:0; background:transparent; cursor:pointer;
+          color:${T.faint}; font-size:11px; line-height:1; width:20px; padding:0;
+          margin-right:2px; transition:transform .12s ease; display:inline-block;
+          transform:rotate(0deg); transform-origin:center; }
+        .cq-caret[data-open="true"] { transform:rotate(90deg); color:${T.body}; }
+        .cq-row:hover .cq-caret { color:${T.body}; }
         .cq-tab { appearance:none; border:0; background:transparent; cursor:pointer;
           font: inherit; font-size:13px; padding:7px 14px; border-radius:5px; color:${T.body}; }
         .cq-tab:hover { background:#EBECF0; }
@@ -370,6 +667,7 @@ function App() {
         .cq-sel { font: inherit; font-size:13px; color:${T.ink}; background:${T.surface};
           border:1px solid ${T.line}; border-radius:5px; padding:7px 10px; min-width:260px; }
         :focus-visible { outline:2px solid ${T.link}; outline-offset:2px; }
+        @media (prefers-reduced-motion: reduce) { .cq-caret { transition:none; } }
       `}</style>
 
       <div style={{ maxWidth: 1080, margin: "0 auto" }}>
@@ -481,7 +779,16 @@ function App() {
                 {active.verdicts && active.verdicts.length ? (
                   <>
                     <Chips verdicts={active.verdicts} />
-                    <Table verdicts={active.verdicts} />
+                    <Table key={active.phase} verdicts={active.verdicts} />
+                    <p
+                      style={{
+                        margin: "8px 0 0",
+                        fontSize: 12,
+                        color: T.faint,
+                      }}
+                    >
+                      Select a row to see its TDL, COO and DE hours.
+                    </p>
                   </>
                 ) : (
                   <div

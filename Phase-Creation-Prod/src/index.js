@@ -3734,7 +3734,12 @@ resolver.define("compareQuotation", async ({ payload }) => {
     // Fetch the NEW-side recipe. DEMO: from the blob under COOK_KEY.
     // REAL: replace this one line with the Quot_WO_... storage.get (see
     // resolveNewRevisionKey comment). Shape is identical, so the cook is unchanged.
-    const newRecipe = blob[COOK_KEY];
+    // Deep-copy per phase: processJsonWithPhase mutates in place, and its
+    // no-subactivity branch multiplies (*=) rather than assigns. Sharing one
+    // recipe object across phases compounds the multipliers — Stack up
+    // tolerances read 8400 in Serie instead of 140 (2 x 60 x 70 vs 2 x 70).
+    // Same guard the Industrialization branch already uses.
+    const newRecipe = JSON.parse(JSON.stringify(blob[COOK_KEY]));
 
     // cook the NEW quotation for this phase
     const cooked = await cookActivitiesTemp(
@@ -3755,7 +3760,7 @@ resolver.define("compareQuotation", async ({ payload }) => {
       const res = await api
         .asApp()
         .requestJira(
-          route`/rest/api/3/issue/${ag.key}?fields=summary,status,customfield_10061`,
+          route`/rest/api/3/issue/${ag.key}?fields=summary,status,customfield_10061,customfield_10075,customfield_10076,customfield_10077`,
         );
       const f = (await res.json()).fields;
       agRows.push({
@@ -3763,6 +3768,9 @@ resolver.define("compareQuotation", async ({ payload }) => {
         summary: f.summary,
         status: f.status?.name || null,
         currentStd: f.customfield_10061 ?? null,
+        currentCOO: f.customfield_10075 ?? null,
+        currentDE: f.customfield_10076 ?? null,
+        currentTDL: f.customfield_10077 ?? null,
       });
     }
 
@@ -3780,7 +3788,13 @@ resolver.define("compareQuotation", async ({ payload }) => {
     // build lookup of cooked activities by normalized key
     const cookedByNorm = {};
     Object.entries(cooked).forEach(([actKey, v]) => {
-      cookedByNorm[norm(actKey)] = { actKey, newStd: v.standard };
+      cookedByNorm[norm(actKey)] = {
+        actKey,
+        newStd: v.standard,
+        newTDL: v.TDL ?? null,
+        newDE: v.DE ?? null,
+        newCOO: v.COO ?? null,
+      };
     });
 
     const round1 = (n) =>
@@ -3805,15 +3819,26 @@ resolver.define("compareQuotation", async ({ payload }) => {
       matchedCookedKeys.add(key);
       const nw = round1(hit.newStd);
 
+      // role-level values, current (Jira) vs new (cook)
+      const curTDL = round1(ag.currentTDL);
+      const curDE = round1(ag.currentDE);
+      const curCOO = round1(ag.currentCOO);
+      const nwTDL = round1(hit.newTDL);
+      const nwDE = round1(hit.newDE);
+      const nwCOO = round1(hit.newCOO);
+
+      // Industrialization cooks only a total — no role split exists there,
+      // so don't let missing roles register as a difference.
+      const hasRoles = nwTDL !== null || nwDE !== null || nwCOO !== null;
+      const rolesSame =
+        !hasRoles || (nwTDL === curTDL && nwDE === curDE && nwCOO === curCOO);
+
       let verdict;
       if (isClosed) {
         verdict = "LOCKED (closed — skip)";
       } else if (cur === null) {
-        // AG exists but has no standard hours — the user set Standard Loop = 0
-        // at creation, so no Loop/WO/Task children were made and nothing rolled
-        // up. There is no baseline to compare against, so this is not a change.
         verdict = "NOT PLANNED (no baseline)";
-      } else if (nw === cur) {
+      } else if (nw === cur && rolesSame) {
         verdict = "SAME";
       } else if (nw === 0) {
         verdict = "REMOVE -> 0";
@@ -3840,7 +3865,19 @@ resolver.define("compareQuotation", async ({ payload }) => {
           flag = "MISSING_DM_CONFIG";
         }
       }
-      verdicts.push({ ...ag, currentStd: cur, newStd: nw, verdict, flag });
+      verdicts.push({
+        ...ag,
+        currentStd: cur,
+        newStd: nw,
+        currentTDL: curTDL,
+        currentDE: curDE,
+        currentCOO: curCOO,
+        newTDL: nwTDL,
+        newDE: nwDE,
+        newCOO: nwCOO,
+        verdict,
+        flag,
+      });
     }
 
     // cooked activities with NO matching AG = ADD candidates
@@ -3854,6 +3891,16 @@ resolver.define("compareQuotation", async ({ payload }) => {
         });
       }
     });
+
+    // AG order comes from Jira's issuelinks array, which is link-creation
+    // order. Deleting and recreating an AG appends its new key at the end,
+    // which splits a WBS section across the table. Sort by the numeric
+    // "Group N" prefix so order is stable no matter when an AG was created.
+    const groupNo = (s) => {
+      const m = String(s || "").match(/^Group\s+(\d+)/i);
+      return m ? parseInt(m[1], 10) : 9999;
+    };
+    verdicts.sort((a, b) => groupNo(a.summary) - groupNo(b.summary));
 
     // concise log of decisions for this phase
     console.log(`[compare] === ${phase.summary} verdicts ===`);
