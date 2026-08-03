@@ -176,6 +176,9 @@ const TH = {
   borderBottom: `1px solid ${T.line}`,
   background: T.canvas,
   textAlign: "left",
+  position: "sticky",
+  top: 0,
+  zIndex: 2,
 };
 const TD = {
   padding: "9px 12px",
@@ -280,48 +283,6 @@ function DetailRows({ row }) {
 
   return (
     <>
-      <tr>
-        <td style={{ ...DETAIL, ...accent }} />
-        <td
-          style={{
-            ...DETAIL,
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: 0.4,
-            textTransform: "uppercase",
-            color: T.faint,
-          }}
-        >
-          Hours by role
-        </td>
-        <td style={DETAIL} />
-        <td
-          style={{
-            ...DETAIL_NUM,
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: 0.4,
-            textTransform: "uppercase",
-            color: T.faint,
-          }}
-        >
-          Current
-        </td>
-        <td
-          style={{
-            ...DETAIL_NUM,
-            fontSize: 11,
-            fontWeight: 700,
-            letterSpacing: 0.4,
-            textTransform: "uppercase",
-            color: T.faint,
-          }}
-        >
-          New
-        </td>
-        <td style={DETAIL} />
-      </tr>
-
       {rows.map((role) => {
         const cur = row[role.cur];
         const nw = row[role.nw];
@@ -356,31 +317,6 @@ function DetailRows({ row }) {
           </tr>
         );
       })}
-
-      <tr>
-        <td style={{ ...DETAIL, ...accent }} />
-        <td style={{ ...DETAIL, color: T.faint }}>Roles add up to</td>
-        <td style={DETAIL} />
-        <td
-          style={{
-            ...DETAIL_NUM,
-            color: curMismatch ? T.amber : T.faint,
-            fontWeight: curMismatch ? 700 : 400,
-          }}
-        >
-          {curSum === null ? "—" : curSum.toFixed(1)}
-        </td>
-        <td
-          style={{
-            ...DETAIL_NUM,
-            color: nwMismatch ? T.amber : T.faint,
-            fontWeight: nwMismatch ? 700 : 400,
-          }}
-        >
-          {nwSum === null ? "—" : nwSum.toFixed(1)}
-        </td>
-        <td style={DETAIL} />
-      </tr>
 
       {notes.length ? (
         <tr>
@@ -425,19 +361,22 @@ function Table({ verdicts }) {
       style={{
         border: `1px solid ${T.line}`,
         borderRadius: 6,
-        overflow: "hidden",
         background: T.surface,
       }}
     >
-      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <table
+        style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}
+      >
         <thead>
           <tr>
-            <th style={{ ...TH, width: 92 }}>Group</th>
+            <th style={{ ...TH, width: 92, borderTopLeftRadius: 6 }}>Group</th>
             <th style={TH}>Activity</th>
             <th style={{ ...TH, width: 108 }}>Status</th>
             <th style={{ ...TH, width: 92, textAlign: "right" }}>Current</th>
             <th style={{ ...TH, width: 92, textAlign: "right" }}>New</th>
-            <th style={{ ...TH, width: 132 }}>Verdict</th>
+            <th style={{ ...TH, width: 132, borderTopRightRadius: 6 }}>
+              Verdict
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -456,7 +395,6 @@ function Table({ verdicts }) {
                       color: T.muted,
                       background: T.canvas,
                       borderBottom: `1px solid ${T.hair}`,
-                      borderTop: `1px solid ${T.hair}`,
                     }}
                   >
                     {b.section}

@@ -3500,6 +3500,7 @@ async function fetchWbsChildren(issueKey) {
     .map((link) => ({
       key: link.outwardIssue.key,
       summary: link.outwardIssue.fields.summary,
+      typeId: link.outwardIssue.fields.issuetype?.id || null,
     }));
 }
 
@@ -3754,7 +3755,14 @@ resolver.define("compareQuotation", async ({ payload }) => {
     delete cooked._diag; // drop it so it isn't treated as an activity
 
     // read live AGs for this phase (key, summary, status, current std)
-    const ags = await fetchWbsChildren(phase.key);
+    // A Phase's WBSGantt children include Milestones (10012) as well as Activity
+    // Groups (10019) — Create Phase links both to the Phase. A Milestone can never
+    // match a cooked activity, so they arrived as ORPHAN rows and would hit Excel
+    // row 1 (not in quotation + Not Started + no actuals = delete). Sayan: leave
+    // milestones untouched, compare activities only.
+    const ags = (await fetchWbsChildren(phase.key)).filter(
+      (c) => c.typeId === "10019",
+    );
     const agRows = [];
     for (const ag of ags) {
       const res = await api
