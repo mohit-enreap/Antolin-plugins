@@ -3706,7 +3706,19 @@ resolver.define("compareQuotation", async ({ payload }) => {
       message: "This project has no Product-BU set.",
     };
   }
-  const COOK_KEY = resolveNewRevisionKey(currentProductKey); // "X New" for now; swap when versioning lands
+
+  // SELF-TEST SWITCH.
+  //   false -> normal: compare against the "X New" revision in the blob.
+  //   true  -> calibration: compare the project against its OWN product, so both
+  //            sides cook the identical recipe. Every AG that has a baseline MUST
+  //            then read SAME. Any CHANGE / REMOVE / ORPHAN is a bug in the
+  //            compare code, not a quotation difference.
+  //   Only meaningful while the catalog has not been edited since Create Phase
+  //   ran for this project — otherwise the difference is catalog drift, not a bug.
+  const CALIBRATE = true;
+  const COOK_KEY = CALIBRATE
+    ? currentProductKey
+    : resolveNewRevisionKey(currentProductKey); // "X New"; swap when versioning lands
 
   // guard: does the NEW revision actually exist in the blob?
   const base64String = await storage.get(STORAGE_KEY);
