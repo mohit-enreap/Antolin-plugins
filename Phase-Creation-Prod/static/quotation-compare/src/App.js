@@ -563,6 +563,7 @@ function App() {
         );
       } else {
         setData(res);
+        console.log("[compare] result:", res); // TEMP — diagnosing CHANGE verdicts
       }
     } catch (e) {
       setError("The comparison could not be completed. Try again.");
