@@ -3715,7 +3715,7 @@ resolver.define("compareQuotation", async ({ payload }) => {
   //            compare code, not a quotation difference.
   //   Only meaningful while the catalog has not been edited since Create Phase
   //   ran for this project — otherwise the difference is catalog drift, not a bug.
-  const CALIBRATE = true;
+  const CALIBRATE = false;
   const COOK_KEY = CALIBRATE
     ? currentProductKey
     : resolveNewRevisionKey(currentProductKey); // "X New"; swap when versioning lands
