@@ -571,6 +571,11 @@ function App() {
     }
   };
 
+  const dump = async () => {
+    const res = await invoke("dumpStorage", { issue });
+    console.log("[dump] storage:", res);
+  };
+
   const phases = (data && data.result) || [];
   const active = phases[tab];
 
@@ -658,6 +663,15 @@ function App() {
             </div>
             <button className="cq-btn" onClick={run} disabled={busy || !issue}>
               {busy ? "Comparing…" : "Compare"}
+            </button>
+            <button
+              className="cq-btn"
+              onClick={dump}
+              disabled={!issue}
+              style={{ background: T.muted }}
+              title="Print stored Create Phase data to the browser console"
+            >
+              Storage
             </button>
           </div>
           <p style={{ margin: "8px 0 0", fontSize: 12, color: T.faint }}>

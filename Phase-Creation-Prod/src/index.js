@@ -3946,5 +3946,74 @@ resolver.define("compareQuotation", async ({ payload }) => {
   };
 });
 
+// ─── STORAGE DUMP (read-only) — never writes, never deletes ───
+// Forge App Storage has no admin UI and no REST endpoint, so the app itself is
+// the only thing that can read it. Returns a readable summary of the three keys
+// that drive a project, so storage questions are answered by fact not inference.
+resolver.define("dumpStorage", async ({ payload }) => {
+  const projectKey = payload?.issue?.key;
+
+  // Same guard the codebase already uses at line 1963. displayConditions hides a
+  // button; it is not a boundary. This refuses to read production storage even
+  // if the resolver is invoked directly.
+  if (!projectKey || !projectKey.startsWith("CTEST")) {
+    return {
+      ok: false,
+      error: "NOT_ALLOWED",
+      message: "Staging projects only.",
+    };
+  }
+
+  // unzip a base64+deflate value into a small readable summary
+  const summarise = (base64) => {
+    if (!base64) return null;
+    try {
+      const json = JSON.parse(
+        pako.inflate(base64ToUint8Array(base64), { to: "string" }),
+      );
+      const acts = json.activities || {};
+      return {
+        phaseName: json.phaseName?.value ?? null,
+        totalHours: json.totalHours ?? null,
+        _3DModification: json._3DModification ?? null,
+        _2DModification: json._2DModification ?? null,
+        dataManagement: json.dataManagement ?? null,
+        activityCount: Object.keys(acts).length,
+        activities: Object.entries(acts)
+          .map(([k, v]) => ({
+            key: k,
+            order: v.order,
+            checked: v.checked,
+            standardLoop: v.standardLoop,
+            standard: v.standard,
+            total: v.total,
+            TDL: v.TDL,
+            COO: v.COO,
+            DE: v.DE,
+          }))
+          .sort((a, b) => String(a.order).localeCompare(String(b.order))),
+      };
+    } catch (e) {
+      return { error: "COULD_NOT_DECODE", message: e?.message };
+    }
+  };
+
+  const out = { ok: true, projectKey, phases: {}, industrializationInputs: {} };
+
+  for (const phase of ["Proto", "Serie", "Industrialization"]) {
+    // the Create Phase form snapshot — this is what the form redisplays
+    out.phases[phase] = summarise(await storage.get(`${projectKey}_${phase}`));
+    // the three derived numbers the Industrialization cook reads
+    out.industrializationInputs[phase] =
+      (await storage.get(`${projectKey}_Industrialization_${phase}`)) ?? null;
+  }
+
+  console.log(
+    `[dump] ${projectKey}`,
+    JSON.stringify(out.industrializationInputs),
+  );
+  return out;
+});
+
 export const handler = resolver.getDefinitions();
 export const handler1 = resolver1.getDefinitions();
