@@ -866,6 +866,22 @@ function App() {
     }
   };
 
+  const overwrite = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await invoke("applyWrites", { issue });
+      console.log("[write] result:", res);
+      if (!res || res.ok !== true) {
+        setError((res && res.message) || "The writes could not be applied.");
+      }
+    } catch (e) {
+      setError("The writes could not be applied. Check the console.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const dump = async () => {
     const res = await invoke("dumpStorage", { issue });
     console.log("[dump] storage:", res);
@@ -980,6 +996,15 @@ function App() {
               title="Dry run — show what would be written. Nothing is changed."
             >
               {busy && mode === "plan" ? "Planning…" : "Plan"}
+            </button>
+            <button
+              className="cq-btn"
+              onClick={overwrite}
+              disabled={busy || !issue}
+              style={{ background: T.muted }}
+              title="Apply the plan. DRY_RUN is on — nothing is sent."
+            >
+              Overwrite
             </button>
           </div>
           <p style={{ margin: "8px 0 0", fontSize: 12, color: T.faint }}>

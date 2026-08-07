@@ -3935,7 +3935,8 @@ async function runComparison(payload) {
       console.log(`[compare]   ${a.verdict} | "${a.actKey}" | new=${a.newStd}`),
     );
 
-    result.push({ phase: phase.summary, verdicts, added });
+    // phaseKey is needed by Step 3's rollup — the plan only carried the label.
+    result.push({ phase: phase.summary, phaseKey: phase.key, verdicts, added });
   }
 
   console.log(`[compare] COOK DONE`);
@@ -4095,7 +4096,9 @@ function resolvePlanRule(row) {
   };
 }
 
-resolver.define("applyPlan", async ({ payload }) => {
+// Extracted so Step 3 builds its writes from the SAME plan the UI renders.
+// A copy would drift the moment one side changed.
+async function buildPlan(payload) {
   const projectKey = payload?.issue?.key;
   if (!projectKey || !projectKey.startsWith("CTEST")) {
     return {
@@ -4190,7 +4193,11 @@ resolver.define("applyPlan", async ({ payload }) => {
     counts[PLAN_ACTION.ADD] = (counts[PLAN_ACTION.ADD] || 0) + adds.length;
     writeCount += adds.length;
 
-    phases.push({ phase: ph.phase, rows: rows.concat(adds) });
+    phases.push({
+      phase: ph.phase,
+      phaseKey: ph.phaseKey,
+      rows: rows.concat(adds),
+    });
   }
 
   console.log(
@@ -4218,6 +4225,233 @@ resolver.define("applyPlan", async ({ payload }) => {
     counts,
     writeCount,
     phases,
+  };
+}
+
+// Thin wrapper — the UI's Plan button. Behaviour is unchanged.
+resolver.define("applyPlan", async ({ payload }) => buildPlan(payload));
+
+// ─── STAGE 2 · STEP 3 — APPLY WRITES ─────────────────────────────────────────
+// The first step that changes Jira. Everything before this was read-only.
+//
+// DRY_RUN is a constant, not a payload flag, so a caller can never arm it.
+// With true, every write is built and logged and nothing is sent.
+//
+// Scope: rules 4, 5 and 6 — the four hour fields on activity groups that
+// already exist. No status changes, no deletes, no creates, no storage writes.
+//
+// Safety:
+//   - the plan is rebuilt here, never accepted from the browser
+//   - each group is re-read immediately before writing and skipped if it moved
+//     since the plan was shown
+//   - only fields that actually differ are sent, so the KPI listener is not
+//     woken for a value that did not change
+//   - 1000 ms between groups, matching create-activity line 1300
+//   - a failure logs and continues; the write is idempotent, so re-running is safe
+//   - every attempt is returned in a receipt with before, after and status —
+//     the only record of what a write replaced
+
+const DRY_RUN = false;
+
+const WRITE_FIELDS = [
+  { k: "total", cf: "customfield_10061" },
+  { k: "COO", cf: "customfield_10075" },
+  { k: "DE", cf: "customfield_10076" },
+  { k: "TDL", cf: "customfield_10077" },
+];
+
+resolver.define("applyWrites", async ({ payload }) => {
+  const projectKey = payload?.issue?.key;
+  if (!projectKey || !projectKey.startsWith("CTEST")) {
+    return {
+      ok: false,
+      error: "NOT_ALLOWED",
+      message: "Staging projects only.",
+    };
+  }
+
+  const plan = await buildPlan(payload);
+  if (!plan.ok) return plan;
+
+  const receipt = [];
+  const phaseDelta = {};
+  let written = 0,
+    skipped = 0,
+    failed = 0;
+
+  // 10061 is in NO propagateActivityHoursBulk array, so the total does not
+  // roll up on its own. COO/DE/TDL do, via the KPI listener at line 2675.
+  // Delta rather than recompute: the phase moves by exactly the number the
+  // plan showed. Summing the rounded groups instead would also apply the
+  // pre-existing round-once/round-each drift, which nobody asked for.
+  async function bump(key, delta, label) {
+    const res = await api
+      .asApp()
+      .requestJira(route`/rest/api/3/issue/${key}?fields=customfield_10061`);
+    const cur = (await res.json()).fields?.customfield_10061 ?? 0;
+    const next = Number((cur + delta).toFixed(1));
+    if (DRY_RUN) {
+      console.log(`[write] DRY RUN ${label} ${key} 10061 ${cur} -> ${next}`);
+      return { key, label, before: cur, after: next, delta, status: "DRY_RUN" };
+    }
+    // A rollup failure must not throw away the receipt for the group writes
+    // that already succeeded — that receipt is the only record of the old values.
+    try {
+      const put = await retryJiraApiCall(() =>
+        api.asApp().requestJira(route`/rest/api/3/issue/${key}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fields: { customfield_10061: next } }),
+        }),
+      );
+      console.log(`[write] ${label} ${key} 10061 ${cur} -> ${next}`);
+      await delay(250);
+      return {
+        key,
+        label,
+        before: cur,
+        after: next,
+        delta,
+        status: put?.ok ? "WRITTEN" : `HTTP_${put?.status ?? "NO_RESPONSE"}`,
+      };
+    } catch (e) {
+      console.error(`[write] ERROR ${label} ${key}`, e?.message);
+      return {
+        key,
+        label,
+        before: cur,
+        after: next,
+        delta,
+        status: "ERROR",
+        message: e?.message,
+      };
+    }
+  }
+
+  for (const ph of plan.phases) {
+    for (const row of ph.rows) {
+      if (row.action !== "update 4 fields" && row.action !== "clear 4 fields")
+        continue;
+
+      // Re-read. The plan showed the user `before`; refuse to overwrite
+      // anything else, in case someone edited the group in between.
+      const res = await api
+        .asApp()
+        .requestJira(
+          route`/rest/api/3/issue/${row.key}?fields=customfield_10061,customfield_10075,customfield_10076,customfield_10077`,
+        );
+      const f = (await res.json()).fields || {};
+      const live = {
+        total: f.customfield_10061 ?? null,
+        COO: f.customfield_10075 ?? null,
+        DE: f.customfield_10076 ?? null,
+        TDL: f.customfield_10077 ?? null,
+      };
+      const moved = WRITE_FIELDS.some(
+        (x) => (live[x.k] ?? null) !== (row.before[x.k] ?? null),
+      );
+      if (moved) {
+        console.warn(
+          `[write] SKIP ${row.key} — changed since the plan was built`,
+        );
+        receipt.push({
+          key: row.key,
+          summary: row.summary,
+          rule: row.rule,
+          status: "SKIPPED_CHANGED",
+          expected: row.before,
+          found: live,
+        });
+        skipped++;
+        continue;
+      }
+
+      // Send only what differs. Row 104 has COO 0.8 -> 0.8; including it would
+      // fire the KPI listener for a field that never moved.
+      const fields = {};
+      WRITE_FIELDS.forEach((x) => {
+        const b = row.before[x.k] ?? null;
+        const a = row.after ? (row.after[x.k] ?? null) : null;
+        if (a !== b) fields[x.cf] = a;
+      });
+      if (!Object.keys(fields).length) {
+        receipt.push({
+          key: row.key,
+          summary: row.summary,
+          rule: row.rule,
+          status: "NO_DIFF",
+        });
+        continue;
+      }
+
+      const dTotal =
+        (row.after ? (row.after.total ?? 0) : 0) - (row.before.total ?? 0);
+      let outcome;
+      if (DRY_RUN) {
+        outcome = "DRY_RUN";
+        console.log(
+          `[write] DRY RUN ${row.key} rule ${row.rule}`,
+          JSON.stringify(fields),
+        );
+      } else {
+        try {
+          const put = await retryJiraApiCall(() =>
+            api.asApp().requestJira(route`/rest/api/3/issue/${row.key}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ fields }),
+            }),
+          );
+          outcome = put.ok ? "WRITTEN" : `HTTP_${put.status}`;
+          console.log(
+            `[write] ${outcome} ${row.key} rule ${row.rule}`,
+            JSON.stringify(fields),
+          );
+          put.ok ? written++ : failed++;
+        } catch (e) {
+          outcome = "ERROR";
+          console.error(`[write] ERROR ${row.key}`, e?.message);
+          failed++;
+        }
+        await delay(250);
+      }
+
+      receipt.push({
+        key: row.key,
+        summary: row.summary,
+        rule: row.rule,
+        status: outcome,
+        fields,
+        before: row.before,
+        after: row.after,
+      });
+      if (outcome === "DRY_RUN" || outcome === "WRITTEN")
+        phaseDelta[ph.phaseKey] = (phaseDelta[ph.phaseKey] || 0) + dTotal;
+    }
+  }
+
+  const rollups = [];
+  let projectDelta = 0;
+  for (const [phaseKey, delta] of Object.entries(phaseDelta)) {
+    if (!delta) continue;
+    projectDelta += delta;
+    rollups.push(await bump(phaseKey, delta, "Phase"));
+  }
+  if (projectDelta)
+    rollups.push(await bump(projectKey, projectDelta, "Project"));
+
+  console.log(
+    `[write] DONE dryRun=${DRY_RUN} written=${written} skipped=${skipped} failed=${failed}`,
+  );
+  return {
+    ok: true,
+    dryRun: DRY_RUN,
+    projectKey,
+    written,
+    skipped,
+    failed,
+    receipt,
+    rollups,
   };
 });
 
