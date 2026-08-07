@@ -3683,7 +3683,9 @@ function resolveNewRevisionKey(currentProductKey) {
   return `${currentProductKey} New`;
 }
 
-resolver.define("compareQuotation", async ({ payload }) => {
+// The comparison body, extracted so Stage 2 can call the SAME code the UI calls.
+// A copy would drift the moment one side changed; one implementation cannot.
+async function runComparison(payload) {
   const { issue } = payload;
   const projectKey = issue.key;
 
@@ -3944,7 +3946,12 @@ resolver.define("compareQuotation", async ({ payload }) => {
     newProduct: COOK_KEY,
     result,
   };
-});
+}
+
+// Thin wrapper — the UI's Compare button. Behaviour is unchanged.
+resolver.define("compareQuotation", async ({ payload }) =>
+  runComparison(payload),
+);
 
 // ─── STORAGE DUMP (read-only) — never writes, never deletes ───
 // Forge App Storage has no admin UI and no REST endpoint, so the app itself is
@@ -4013,6 +4020,205 @@ resolver.define("dumpStorage", async ({ payload }) => {
     JSON.stringify(out.industrializationInputs),
   );
   return out;
+});
+
+// ─── STAGE 2 · STEP 1 — APPLY PLAN (read-only) ───────────────────────────────
+// Turns a comparison into the list of writes it implies, recording the BEFORE
+// value of every field beside the AFTER.
+//
+// WRITES NOTHING. storage.get and Jira GET only. No PUT, POST or DELETE.
+//
+// Recomputes rather than accepting the browser's compare result: a tab opened at
+// 10:00 must not apply 10:00 numbers at 10:30 after the catalog moved. The plan
+// is always built from a comparison this resolver ran itself.
+//
+// Records BEFORE because the compare's Current column exists only on screen.
+// Once a write lands there is no other record of what it replaced.
+
+const PLAN_ACTION = {
+  SKIP: "skip",
+  UPDATE: "update 4 fields",
+  CLEAR: "clear 4 fields",
+  DELETE: "delete group and children",
+  ADD: "create via create phase",
+  NONE: "no action",
+};
+
+// One comparison row -> the rule that governs it.
+// Statuses: Closed | Submit for Approval | In Progress | Not Started.
+// "started" means work has begun, so hours are cleared rather than deleted.
+function resolvePlanRule(row) {
+  const v = String(row.verdict || "");
+  const status = row.status || "";
+  const started = status === "In Progress" || status === "Submit for Approval";
+
+  if (status === "Closed")
+    return { rule: 1, action: PLAN_ACTION.SKIP, why: "group is closed" };
+  if (v.startsWith("NOT PLANNED"))
+    return { rule: 7, action: PLAN_ACTION.NONE, why: "no baseline hours" };
+  if (v.startsWith("ORPHAN"))
+    return {
+      rule: null,
+      action: PLAN_ACTION.NONE,
+      why: "no match in the new quotation",
+    };
+  if (v === "SAME")
+    return { rule: null, action: PLAN_ACTION.NONE, why: "identical" };
+  if (v.startsWith("REMOVE"))
+    return started
+      ? {
+          rule: 4,
+          action: PLAN_ACTION.CLEAR,
+          why: "dropped from the quotation, work started",
+        }
+      : {
+          rule: 3,
+          action: PLAN_ACTION.DELETE,
+          why: "dropped from the quotation, not started",
+        };
+  if (v === "CHANGE")
+    return started
+      ? {
+          rule: 5,
+          action: PLAN_ACTION.UPDATE,
+          why: "hours changed, work started",
+        }
+      : {
+          rule: 6,
+          action: PLAN_ACTION.UPDATE,
+          why: "hours changed, not started",
+        };
+  return {
+    rule: null,
+    action: PLAN_ACTION.NONE,
+    why: `unmapped verdict "${v}"`,
+  };
+}
+
+resolver.define("applyPlan", async ({ payload }) => {
+  const projectKey = payload?.issue?.key;
+  if (!projectKey || !projectKey.startsWith("CTEST")) {
+    return {
+      ok: false,
+      error: "NOT_ALLOWED",
+      message: "Staging projects only.",
+    };
+  }
+
+  const cmp = await runComparison(payload);
+  if (!cmp.ok) return cmp;
+
+  const phases = [];
+  const counts = {};
+  let writeCount = 0;
+
+  for (const ph of cmp.result) {
+    const rows = [];
+
+    for (const v of ph.verdicts) {
+      const r = resolvePlanRule(v);
+      let veto = null;
+
+      // Both destructive actions rest on "the new quotation says zero". A zero
+      // caused by a missing 2D / Data Management section is a config gap, not a
+      // de-scope — the safeguard flag vetoes it.
+      if (
+        v.flag &&
+        (r.action === PLAN_ACTION.DELETE || r.action === PLAN_ACTION.CLEAR)
+      ) {
+        veto = `config flag ${v.flag}`;
+      }
+
+      // Delete removes the Activity, Work Order and Task beneath the group.
+      // Never where time has been logged, whatever the status says.
+      if (!veto && r.action === PLAN_ACTION.DELETE) {
+        const res = await api
+          .asApp()
+          .requestJira(
+            route`/rest/api/3/issue/${v.key}?fields=customfield_10065`,
+          );
+        const actual = (await res.json()).fields?.customfield_10065 ?? 0;
+        if (actual > 0) veto = `actual hours logged (${actual})`;
+      }
+
+      const action = veto ? PLAN_ACTION.NONE : r.action;
+      const before = {
+        total: v.currentStd ?? null,
+        TDL: v.currentTDL ?? null,
+        COO: v.currentCOO ?? null,
+        DE: v.currentDE ?? null,
+      };
+      let after = null;
+      if (action === PLAN_ACTION.UPDATE)
+        after = { total: v.newStd, TDL: v.newTDL, COO: v.newCOO, DE: v.newDE };
+      if (action === PLAN_ACTION.CLEAR)
+        after = { total: null, TDL: null, COO: null, DE: null };
+
+      counts[action] = (counts[action] || 0) + 1;
+      if (action !== PLAN_ACTION.NONE && action !== PLAN_ACTION.SKIP)
+        writeCount++;
+
+      rows.push({
+        key: v.key,
+        summary: v.summary,
+        status: v.status,
+        verdict: v.verdict,
+        rule: r.rule,
+        action,
+        why: veto ? `${r.why} — VETOED: ${veto}` : r.why,
+        veto,
+        before,
+        after,
+      });
+    }
+
+    // ADD candidates have no Jira issue yet, so there is no before to record.
+    // Rule 2 is fulfilled by updating the stored snapshot and re-running Create
+    // Phase — not by creating issues here.
+    const adds = (ph.added || []).map((a) => ({
+      key: null,
+      summary: a.actKey,
+      status: null,
+      verdict: a.verdict,
+      rule: 2,
+      action: PLAN_ACTION.ADD,
+      why: "in the new quotation, no group yet",
+      veto: null,
+      before: null,
+      after: { total: a.newStd, TDL: null, COO: null, DE: null },
+    }));
+    counts[PLAN_ACTION.ADD] = (counts[PLAN_ACTION.ADD] || 0) + adds.length;
+    writeCount += adds.length;
+
+    phases.push({ phase: ph.phase, rows: rows.concat(adds) });
+  }
+
+  console.log(
+    `[plan] ${projectKey} DRY RUN — ${writeCount} intended writes`,
+    JSON.stringify(counts),
+  );
+  phases.forEach((p) =>
+    p.rows
+      .filter(
+        (r) => r.action !== PLAN_ACTION.NONE && r.action !== PLAN_ACTION.SKIP,
+      )
+      .forEach((r) =>
+        console.log(
+          `[plan]   ${p.phase} | rule ${r.rule} | ${r.action} | ${r.summary}`,
+        ),
+      ),
+  );
+
+  return {
+    ok: true,
+    dryRun: true,
+    projectKey,
+    currentProduct: cmp.currentProduct,
+    newProduct: cmp.newProduct,
+    counts,
+    writeCount,
+    phases,
+  };
 });
 
 export const handler = resolver.getDefinitions();

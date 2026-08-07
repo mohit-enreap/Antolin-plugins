@@ -576,6 +576,11 @@ function App() {
     console.log("[dump] storage:", res);
   };
 
+  const plan = async () => {
+    const res = await invoke("applyPlan", { issue });
+    console.log("[plan] result:", res);
+  };
+
   const phases = (data && data.result) || [];
   const active = phases[tab];
 
@@ -672,6 +677,15 @@ function App() {
               title="Print stored Create Phase data to the browser console"
             >
               Storage
+            </button>
+            <button
+              className="cq-btn"
+              onClick={plan}
+              disabled={!issue}
+              style={{ background: T.muted }}
+              title="Dry run — print the intended writes to the browser console"
+            >
+              Plan
             </button>
           </div>
           <p style={{ margin: "8px 0 0", fontSize: 12, color: T.faint }}>
