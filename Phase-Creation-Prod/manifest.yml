@@ -25,6 +25,11 @@ modules:
       resolver:
         function: update-quot-issue-func
         method: updateQuotationIssue
+    - key: overwrite-consumer #Applies the quotation overwrite in the background
+      queue: overwrite-queue
+      resolver:
+        function: overwrite-function
+        method: applyWritesConsumer
   jira:issueAction:
     - key: phase-creation-issue-action
       resource: main
@@ -154,6 +159,9 @@ modules:
 
     - key: update-today-function
       handler: index.updateToday
+
+    - key: overwrite-function
+      handler: index.applyWritesConsumer
       timeoutSeconds: 900
 
 # link React app build files to the app

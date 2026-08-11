@@ -11,6 +11,8 @@ const updateKPIQueue = new Queue({ key: "kpi-update-queue" });
 const updateLogQueue = new Queue({ key: "log-update-queue" });
 const updateTodayQueue = new Queue({ key: "update-today-queue" });
 const updateQuotationQueue = new Queue({ key: "quotation-update-queue" });
+// Step 3b: the overwrite runs here instead of in the button's 25 second window.
+const overwriteQueue = new Queue({ key: "overwrite-queue" });
 
 const resolver = new Resolver();
 const resolver1 = new Resolver();
@@ -4260,6 +4262,8 @@ const WRITE_FIELDS = [
   { k: "TDL", cf: "customfield_10077" },
 ];
 
+// The button. Pushes and returns immediately — same shape as setData at line
+// 471, which is how Create Phase escapes the same 25 second limit.
 resolver.define("applyWrites", async ({ payload }) => {
   const projectKey = payload?.issue?.key;
   if (!projectKey || !projectKey.startsWith("CTEST")) {
@@ -4269,6 +4273,16 @@ resolver.define("applyWrites", async ({ payload }) => {
       message: "Staging projects only.",
     };
   }
+  await overwriteQueue.push(payload);
+  console.log(`[write] queued ${projectKey}`);
+  return { ok: true, queued: true, projectKey };
+});
+
+// The queue consumer — 900 seconds instead of 25. The body below is unchanged
+// except for where it gets its payload, the project rollup, and the receipt.
+export async function applyWritesConsumer(event, context) {
+  const payload = event?.call?.payload ?? event;
+  const projectKey = payload?.issue?.key;
 
   const plan = await buildPlan(payload);
   if (!plan.ok) return plan;
@@ -4437,14 +4451,26 @@ resolver.define("applyWrites", async ({ payload }) => {
     projectDelta += delta;
     rollups.push(await bump(phaseKey, delta, "Phase"));
   }
+  // Phases keep the delta so they don't shift by the 0.4 round-once/round-each
+  // drift. The project recomputes: same answer, because the project is exactly
+  // the sum of its phases — but idempotent, so a half-run is repairable.
+  const predicted = {};
+  rollups.forEach((r) => {
+    if (r.label === "Phase") predicted[r.key] = r.after;
+  });
   if (projectDelta)
-    rollups.push(await bump(projectKey, projectDelta, "Project"));
+    rollups.push(await rollupProjectTotal(projectKey, predicted));
 
   console.log(
     `[write] DONE dryRun=${DRY_RUN} written=${written} skipped=${skipped} failed=${failed}`,
   );
-  return {
+
+  // The receipt is the only record of what each write replaced — Jira keeps no
+  // history of these fields and forge logs expire. One key per project,
+  // overwritten each run.
+  const record = {
     ok: true,
+    at: new Date().toISOString(),
     dryRun: DRY_RUN,
     projectKey,
     written,
@@ -4453,7 +4479,14 @@ resolver.define("applyWrites", async ({ payload }) => {
     receipt,
     rollups,
   };
-});
+  try {
+    await storage.set(`${projectKey}_lastOverwrite`, record);
+    console.log(`[write] receipt stored for ${projectKey}`);
+  } catch (e) {
+    console.error(`[write] could not store receipt`, e?.message);
+  }
+  return record;
+}
 
 // ─── ROLLUP REPAIR (idempotent) ──────────────────────────────────────────────
 // Sets the project's 10061 to the sum of its phases' 10061.
@@ -4472,16 +4505,11 @@ resolver.define("applyWrites", async ({ payload }) => {
 // (line 1168-1172), so total never equals the sum of its roles at any level —
 // groups 108, 118 and 119 already differ and were never written by us.
 
-resolver.define("rollupTotals", async ({ payload }) => {
-  const projectKey = payload?.issue?.key;
-  if (!projectKey || !projectKey.startsWith("CTEST")) {
-    return {
-      ok: false,
-      error: "NOT_ALLOWED",
-      message: "Staging projects only.",
-    };
-  }
-
+// `predicted` lets a dry run see the project total it WOULD reach. Without it
+// the recompute reads phase values that the dry run never wrote, so it reports
+// no change. In a live run predicted equals what was just written, so the
+// answer is the same either way.
+async function rollupProjectTotal(projectKey, predicted) {
   const phases = (await fetchWbsChildren(projectKey)).filter(
     (c) => c.typeId === "10016",
   );
@@ -4491,7 +4519,8 @@ resolver.define("rollupTotals", async ({ payload }) => {
     const r = await api
       .asApp()
       .requestJira(route`/rest/api/3/issue/${ph.key}?fields=customfield_10061`);
-    const v = (await r.json()).fields?.customfield_10061 ?? 0;
+    const v =
+      predicted?.[ph.key] ?? (await r.json()).fields?.customfield_10061 ?? 0;
     parts.push({ key: ph.key, phase: ph.summary, total: v });
     sum += v;
   }
@@ -4565,6 +4594,33 @@ resolver.define("rollupTotals", async ({ payload }) => {
       phases: parts,
     };
   }
+}
+
+// Manual repair, if a queued job ever half-fails. Not on the normal path.
+resolver.define("rollupTotals", async ({ payload }) => {
+  const projectKey = payload?.issue?.key;
+  if (!projectKey || !projectKey.startsWith("CTEST")) {
+    return {
+      ok: false,
+      error: "NOT_ALLOWED",
+      message: "Staging projects only.",
+    };
+  }
+  return rollupProjectTotal(projectKey);
+});
+
+// Read-only. How the UI learns the queued job finished and what it did.
+resolver.define("getLastOverwrite", async ({ payload }) => {
+  const projectKey = payload?.issue?.key;
+  if (!projectKey || !projectKey.startsWith("CTEST")) {
+    return {
+      ok: false,
+      error: "NOT_ALLOWED",
+      message: "Staging projects only.",
+    };
+  }
+  const record = await storage.get(`${projectKey}_lastOverwrite`);
+  return { ok: true, projectKey, record: record ?? null };
 });
 
 export const handler = resolver.getDefinitions();

@@ -870,16 +870,28 @@ function App() {
     setBusy(true);
     setError(null);
     try {
+      // Remember the current receipt's timestamp so a new one is recognisable.
+      const prev = await invoke("getLastOverwrite", { issue });
+      const prevAt = prev?.record?.at ?? null;
+
       const res = await invoke("applyWrites", { issue });
-      console.log("[write] result:", res);
+      console.log("[write] queued:", res);
       if (!res || res.ok !== true) {
-        setError((res && res.message) || "The writes could not be applied.");
+        setError((res && res.message) || "Could not queue the overwrite.");
+        return;
       }
-      // Separate invocation so the rollup gets its own 25 second budget. It
-      // recomputes from the phases, so it is safe to run even when applyWrites
-      // wrote nothing — which is exactly how a half-finished run gets repaired.
-      const roll = await invoke("rollupTotals", { issue });
-      console.log("[rollup] result:", roll);
+
+      // The job runs on the queue, so the response carries no receipt. Poll the
+      // stored one for up to three minutes.
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const now = await invoke("getLastOverwrite", { issue });
+        if (now?.record?.at && now.record.at !== prevAt) {
+          console.log("[write] receipt:", now.record);
+          return;
+        }
+      }
+      setError("Still running. Check the Gantt in a minute.");
     } catch (e) {
       setError("The writes could not be applied. Check the console.");
     } finally {
