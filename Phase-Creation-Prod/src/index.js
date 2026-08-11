@@ -4251,7 +4251,7 @@ resolver.define("applyPlan", async ({ payload }) => buildPlan(payload));
 //   - every attempt is returned in a receipt with before, after and status —
 //     the only record of what a write replaced
 
-const DRY_RUN = false;
+const DRY_RUN = true;
 
 const WRITE_FIELDS = [
   { k: "total", cf: "customfield_10061" },
@@ -4453,6 +4453,118 @@ resolver.define("applyWrites", async ({ payload }) => {
     receipt,
     rollups,
   };
+});
+
+// ─── ROLLUP REPAIR (idempotent) ──────────────────────────────────────────────
+// Sets the project's 10061 to the sum of its phases' 10061.
+//
+// Step 3 rolls the total up with a DELTA, which only works inside the same
+// invocation as the writes. When that invocation hit the 25 second limit right
+// after the phase rollups, the project was left stale and there was no way to
+// finish — re-running applyWrites skips every already-written group, so the
+// delta is empty and no rollup happens.
+//
+// This RECOMPUTES instead, so running it twice gives the same answer and a
+// partial run can always be repaired. 3 reads and 1 write, well inside budget.
+//
+// The project total will not equal the sum of the phase TDL + COO + DE columns.
+// Create Phase rounds all four fields independently from one unrounded cook
+// (line 1168-1172), so total never equals the sum of its roles at any level —
+// groups 108, 118 and 119 already differ and were never written by us.
+
+resolver.define("rollupTotals", async ({ payload }) => {
+  const projectKey = payload?.issue?.key;
+  if (!projectKey || !projectKey.startsWith("CTEST")) {
+    return {
+      ok: false,
+      error: "NOT_ALLOWED",
+      message: "Staging projects only.",
+    };
+  }
+
+  const phases = (await fetchWbsChildren(projectKey)).filter(
+    (c) => c.typeId === "10016",
+  );
+  const parts = [];
+  let sum = 0;
+  for (const ph of phases) {
+    const r = await api
+      .asApp()
+      .requestJira(route`/rest/api/3/issue/${ph.key}?fields=customfield_10061`);
+    const v = (await r.json()).fields?.customfield_10061 ?? 0;
+    parts.push({ key: ph.key, phase: ph.summary, total: v });
+    sum += v;
+  }
+  if (!parts.length) {
+    return {
+      ok: false,
+      error: "NO_PHASES",
+      message: "No phases under this project.",
+    };
+  }
+  const next = Number(sum.toFixed(1));
+
+  const curRes = await api
+    .asApp()
+    .requestJira(
+      route`/rest/api/3/issue/${projectKey}?fields=customfield_10061`,
+    );
+  const before = (await curRes.json()).fields?.customfield_10061 ?? 0;
+
+  if (before === next) {
+    console.log(`[rollup] ${projectKey} already ${next} — nothing to do`);
+    return {
+      ok: true,
+      dryRun: DRY_RUN,
+      projectKey,
+      before,
+      after: next,
+      phases: parts,
+      status: "NO_DIFF",
+    };
+  }
+  if (DRY_RUN) {
+    console.log(`[rollup] DRY RUN ${projectKey} 10061 ${before} -> ${next}`);
+    return {
+      ok: true,
+      dryRun: true,
+      projectKey,
+      before,
+      after: next,
+      phases: parts,
+      status: "DRY_RUN",
+    };
+  }
+  try {
+    const put = await retryJiraApiCall(() =>
+      api.asApp().requestJira(route`/rest/api/3/issue/${projectKey}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fields: { customfield_10061: next } }),
+      }),
+    );
+    console.log(`[rollup] ${projectKey} 10061 ${before} -> ${next}`);
+    return {
+      ok: true,
+      dryRun: false,
+      projectKey,
+      before,
+      after: next,
+      phases: parts,
+      status: put?.ok ? "WRITTEN" : `HTTP_${put?.status ?? "NO_RESPONSE"}`,
+    };
+  } catch (e) {
+    console.error(`[rollup] ERROR ${projectKey}`, e?.message);
+    return {
+      ok: false,
+      error: "WRITE_FAILED",
+      message: e?.message,
+      projectKey,
+      before,
+      after: next,
+      phases: parts,
+    };
+  }
 });
 
 export const handler = resolver.getDefinitions();

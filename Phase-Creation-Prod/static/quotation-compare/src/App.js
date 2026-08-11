@@ -875,6 +875,11 @@ function App() {
       if (!res || res.ok !== true) {
         setError((res && res.message) || "The writes could not be applied.");
       }
+      // Separate invocation so the rollup gets its own 25 second budget. It
+      // recomputes from the phases, so it is safe to run even when applyWrites
+      // wrote nothing — which is exactly how a half-finished run gets repaired.
+      const roll = await invoke("rollupTotals", { issue });
+      console.log("[rollup] result:", roll);
     } catch (e) {
       setError("The writes could not be applied. Check the console.");
     } finally {
