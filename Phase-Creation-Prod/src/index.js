@@ -3685,11 +3685,55 @@ function resolveNewRevisionKey(currentProductKey) {
   return `${currentProductKey} New`;
 }
 
+// The unrounded cook for one phase. runComparison rounds to one decimal for
+// display; the snapshot stores raw values, so Step 5 needs what it rounds away.
+// Sits here because it uses resolveNewRevisionKey above and cookActivitiesTemp
+// at 3517.
+async function cookForPhase(projectKey, phaseName) {
+  const projRes = await api
+    .asApp()
+    .requestJira(
+      route`/rest/api/3/issue/${projectKey}?fields=customfield_10074,customfield_10838,customfield_10073`,
+    );
+  const f = (await projRes.json()).fields;
+  const productParts = (f.customfield_10074 || []).map((e) => e.value);
+  const customer = f.customfield_10838?.value;
+  const currentProductKey = f.customfield_10073?.value;
+  if (!currentProductKey) return null;
+
+  const COOK_KEY = resolveNewRevisionKey(currentProductKey);
+  const blob = JSON.parse(
+    pako.inflate(base64ToUint8Array(await storage.get(STORAGE_KEY)), {
+      to: "string",
+    }),
+  );
+  if (!blob[COOK_KEY]) return null;
+
+  // Deep copy for the same reason runComparison does it: processJsonWithPhase
+  // mutates in place and its no-subactivity branch multiplies rather than
+  // assigns, so a shared recipe compounds across phases.
+  const cooked = await cookActivitiesTemp(
+    JSON.parse(JSON.stringify(blob[COOK_KEY])),
+    COOK_KEY,
+    phaseName,
+    productParts,
+    customer,
+    projectKey,
+  );
+  delete cooked._diag;
+  return cooked;
+}
+
 // The comparison body, extracted so Stage 2 can call the SAME code the UI calls.
 // A copy would drift the moment one side changed; one implementation cannot.
 async function runComparison(payload) {
   const { issue } = payload;
   const projectKey = issue.key;
+  // Step 3c writes one phase, but this still cooked all three and read every
+  // activity group in the project — roughly 60 fetches and three inflates, which
+  // is where the 55 second consumer budget went. The write path passes
+  // phaseKey; the UI passes nothing and still gets every phase.
+  const onlyPhaseKey = payload?.phaseKey || null;
 
   // read project product parts + customer + current product (drive the cook)
   const projRes = await api
@@ -3746,6 +3790,7 @@ async function runComparison(payload) {
   const result = [];
 
   for (const phase of phases) {
+    if (onlyPhaseKey && phase.key !== onlyPhaseKey) continue;
     const phaseName = phase.summary.replace(/^\d+\s*/, "").trim();
 
     // Fetch the NEW-side recipe. DEMO: from the blob under COOK_KEY.
@@ -3938,7 +3983,15 @@ async function runComparison(payload) {
     );
 
     // phaseKey is needed by Step 3's rollup — the plan only carried the label.
-    result.push({ phase: phase.summary, phaseKey: phase.key, verdicts, added });
+    // `cooked` is the unrounded cook Step 5 writes into the snapshot. Built
+    // here already — rebuilding it cost an extra fetch, inflate and cook.
+    result.push({
+      phase: phase.summary,
+      phaseKey: phase.key,
+      verdicts,
+      added,
+      cooked,
+    });
   }
 
   console.log(`[compare] COOK DONE`);
@@ -4198,6 +4251,7 @@ async function buildPlan(payload) {
     phases.push({
       phase: ph.phase,
       phaseKey: ph.phaseKey,
+      cooked: ph.cooked,
       rows: rows.concat(adds),
     });
   }
@@ -4231,7 +4285,12 @@ async function buildPlan(payload) {
 }
 
 // Thin wrapper — the UI's Plan button. Behaviour is unchanged.
-resolver.define("applyPlan", async ({ payload }) => buildPlan(payload));
+resolver.define("applyPlan", async ({ payload }) => {
+  const plan = await buildPlan(payload);
+  // The cook is for the write path only — the UI has the rounded values it needs.
+  if (plan?.phases) plan.phases.forEach((p) => delete p.cooked);
+  return plan;
+});
 
 // ─── STAGE 2 · STEP 3 — APPLY WRITES ─────────────────────────────────────────
 // The first step that changes Jira. Everything before this was read-only.
@@ -4253,7 +4312,7 @@ resolver.define("applyPlan", async ({ payload }) => buildPlan(payload));
 //   - every attempt is returned in a receipt with before, after and status —
 //     the only record of what a write replaced
 
-const DRY_RUN = true;
+const DRY_RUN = false;
 
 const WRITE_FIELDS = [
   { k: "total", cf: "customfield_10061" },
@@ -4291,12 +4350,17 @@ resolver.define("applyWrites", async ({ payload }) => {
 // The queue consumer — 900 seconds instead of 25. The body below is unchanged
 // except for where it gets its payload, the project rollup, and the receipt.
 export async function applyWritesConsumer(event, context) {
+  const t0 = Date.now();
+  const ms = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
   const payload = event?.call?.payload ?? event;
   const projectKey = payload?.issue?.key;
   const phaseKey = payload?.phaseKey;
   let phaseLabel = null;
+  let phaseRows = [];
+  let phaseCooked = null;
 
   const plan = await buildPlan(payload);
+  console.log(`[write] plan built at ${ms()}`);
   if (!plan.ok) return plan;
 
   const receipt = [];
@@ -4358,6 +4422,8 @@ export async function applyWritesConsumer(event, context) {
     // Everything outside the chosen phase is left exactly as it is.
     if (ph.phaseKey !== phaseKey) continue;
     phaseLabel = ph.phase;
+    phaseRows = ph.rows;
+    phaseCooked = ph.cooked || null;
     for (const row of ph.rows) {
       if (row.action !== "update 4 fields" && row.action !== "clear 4 fields")
         continue;
@@ -4458,6 +4524,10 @@ export async function applyWritesConsumer(event, context) {
         phaseDelta[ph.phaseKey] = (phaseDelta[ph.phaseKey] || 0) + dTotal;
     }
   }
+  // phaseCooked holds what Step 5 needs; drop the rest so nothing large
+  // survives into the return value.
+  plan.phases.forEach((p) => delete p.cooked);
+  console.log(`[write] writes done at ${ms()}`);
 
   const rollups = [];
   let projectDelta = 0;
@@ -4475,6 +4545,26 @@ export async function applyWritesConsumer(event, context) {
   });
   if (projectDelta)
     rollups.push(await rollupProjectTotal(projectKey, predicted));
+  console.log(`[write] rollups done at ${ms()}`);
+
+  if (!phaseLabel) {
+    console.warn(`[write] phase ${phaseKey} not found in the plan`);
+    return { ok: false, error: "PHASE_NOT_FOUND", projectKey, phaseKey };
+  }
+
+  // Step 5. Runs after the writes so a snapshot patch can never precede the
+  // Jira change it describes.
+  let snapshot = null;
+  try {
+    const phaseName = phaseLabel.replace(/^\d+\s*/, "").trim();
+    snapshot = phaseCooked
+      ? await patchPhaseSnapshot(projectKey, phaseName, phaseCooked, phaseRows)
+      : { ok: false, error: "NO_COOK" };
+  } catch (e) {
+    console.error(`[snap] ERROR`, e?.message);
+    snapshot = { ok: false, error: "ERROR", message: e?.message };
+  }
+  console.log(`[write] snapshot done at ${ms()}`);
 
   console.log(
     `[write] DONE dryRun=${DRY_RUN} written=${written} skipped=${skipped} failed=${failed}`,
@@ -4483,11 +4573,6 @@ export async function applyWritesConsumer(event, context) {
   // The receipt is the only record of what each write replaced — Jira keeps no
   // history of these fields and forge logs expire. One key per project,
   // overwritten each run.
-  if (!phaseLabel) {
-    console.warn(`[write] phase ${phaseKey} not found in the plan`);
-    return { ok: false, error: "PHASE_NOT_FOUND", projectKey, phaseKey };
-  }
-
   const record = {
     ok: true,
     at: new Date().toISOString(),
@@ -4500,6 +4585,7 @@ export async function applyWritesConsumer(event, context) {
     failed,
     receipt,
     rollups,
+    snapshot,
   };
   try {
     // One receipt per phase. A single project key would let a Serie run erase
@@ -4648,6 +4734,208 @@ resolver.define("getLastOverwrite", async ({ payload }) => {
   const record = await storage.get(`${projectKey}_lastOverwrite_${phaseKey}`);
   return { ok: true, projectKey, phaseKey, record: record ?? null };
 });
+
+// ─── STAGE 2 · STEP 5 — PATCH THE CREATE PHASE SNAPSHOT ──────────────────────
+// After an overwrite, Jira and storage disagree. Create Phase restores the
+// snapshot over the fresh cook (create-phase App.js line 313), so the form
+// shows the old hours; Industrialization stays frozen because it cooks from
+// _Industrialization_Proto / _Serie; and re-running Create Phase rewrites
+// 10061 from the old snapshot at line 1204, undoing the overwrite silently.
+//
+// Both keys are copied to _preOverwrite first, and the deflate is inflated back
+// and parsed before anything is stored. Forge storage has no undo, and nothing
+// else in this codebase deflates on the backend — App.js does the zipping and
+// the resolver only ever stored the string it was handed.
+
+// Reproduces create-phase App.js 149-235. Any drift here and the form shows
+// different totals from the ones we just wrote to Jira.
+function recomputeSnapshotHeader(activities) {
+  let totalHours = 0,
+    dataManagement = 0,
+    _2DModification = 0;
+  Object.entries(activities).forEach(([k, v]) => {
+    if (!v || !v.checked || !v.standardLoop) return;
+    if (!k.includes("ITERATIONS")) totalHours += v.total || 0;
+    if (
+      k.includes("Customer input data management") ||
+      k.includes("Data management") ||
+      k.includes("Upload & Download customer data")
+    )
+      dataManagement += v.standard || 0;
+    if (k.startsWith("2D Drawing") || k.startsWith("2D DELIVERABLES"))
+      _2DModification += v.standard || 0;
+  });
+  // App.js 200-223: iterations are a percentage of the standard total, added
+  // to totalHours only when that activity is itself on.
+  const it = activities["ITERATIONS|ITERATIONS"];
+  if (it && it.checked && it.standardLoop > 0) {
+    let base = 0;
+    Object.entries(activities).forEach(([k, v]) => {
+      if (
+        !k.includes("ITERATIONS") &&
+        !k.includes("TCL ACTIVITIES") &&
+        v &&
+        v.checked &&
+        v.standardLoop
+      )
+        base += v.standard || 0;
+    });
+    totalHours += parseFloat(((base * (it.percentage || 0)) / 100).toFixed(2));
+  }
+  return {
+    totalHours,
+    dataManagement,
+    _2DModification,
+    _3DModification: totalHours - _2DModification - dataManagement,
+  };
+}
+
+// Snapshot keys are "SECTION|Activity"; AG summaries are "Group N | SECTION | Activity".
+const snapNorm = (s) =>
+  String(s || "")
+    .replace(/^Group\s+\S+\s*\|/, "")
+    .split("|")
+    .map((p) => p.trim())
+    .join(" | ")
+    .toLowerCase();
+
+async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
+  const snapKey = `${projectKey}_${phaseName}`;
+  const derKey = `${projectKey}_Industrialization_${phaseName}`;
+  const b64 = await storage.get(snapKey);
+  if (!b64) return { ok: false, error: "NO_SNAPSHOT", key: snapKey };
+
+  let snap;
+  try {
+    snap = JSON.parse(pako.inflate(base64ToUint8Array(b64), { to: "string" }));
+  } catch (e) {
+    return { ok: false, error: "COULD_NOT_DECODE", message: e?.message };
+  }
+  const acts = snap.activities || {};
+  const byNorm = {};
+  Object.keys(acts).forEach((k) => (byNorm[snapNorm(k)] = k));
+  const cookedByNorm = {};
+  Object.entries(cooked).forEach(([k, v]) => (cookedByNorm[snapNorm(k)] = v));
+
+  const touched = [];
+  for (const row of rows) {
+    const isUpdate = row.action === "update 4 fields";
+    const isClear = row.action === "clear 4 fields";
+    const isSame =
+      row.action === "no action" && !row.veto && row.verdict === "SAME";
+    // A group cleared before Step 5 existed reads NOT PLANNED now, not REMOVE,
+    // so it was never patched and storage still carries hours Jira does not.
+    // Jira having null is the fact; the snapshot is the stale copy.
+    const isStale =
+      row.action === "no action" &&
+      !row.veto &&
+      String(row.verdict).startsWith("NOT PLANNED") &&
+      (row.before?.total ?? null) === null;
+    // delete, add, locked and vetoed rows are left alone — other steps own them,
+    // and touching them would put storage ahead of Jira.
+    if (!isUpdate && !isClear && !isSame && !isStale) continue;
+    const n = snapNorm(row.summary);
+    const ak = byNorm[n];
+    if (!ak) continue;
+    const a = acts[ak];
+    const before = {
+      standard: a.standard,
+      total: a.total,
+      checked: a.checked,
+      standardLoop: a.standardLoop,
+    };
+    if (isClear || isStale) {
+      // Unticked at zero. create-activity line 1145 then skips it entirely on a
+      // re-run, so 10061 is not rewritten — which is the whole point.
+      a.checked = false;
+      a.standardLoop = 0;
+      a.standard = 0;
+      a.TDL = 0;
+      a.COO = 0;
+      a.DE = 0;
+      a.total = 0;
+    } else {
+      const c = cookedByNorm[n];
+      if (!c) continue;
+      // Unrounded, exactly as Create Phase stores them.
+      a.standard = c.standard;
+      a.TDL = c.TDL ?? 0;
+      a.COO = c.COO ?? 0;
+      a.DE = c.DE ?? 0;
+      a.total = (a.standard || 0) * (a.standardLoop || 0);
+    }
+    touched.push({
+      activity: ak,
+      rule: row.rule ?? null,
+      action: row.action,
+      before,
+      after: {
+        standard: a.standard,
+        total: a.total,
+        checked: a.checked,
+        standardLoop: a.standardLoop,
+      },
+    });
+  }
+
+  const head = recomputeSnapshotHeader(acts);
+  const headBefore = {
+    totalHours: snap.totalHours,
+    _3DModification: snap._3DModification,
+    _2DModification: snap._2DModification,
+    dataManagement: snap.dataManagement,
+  };
+  Object.assign(snap, head);
+  const derived = {
+    _3DModification: head._3DModification,
+    _2DModification: head._2DModification,
+    dataManagement: head.dataManagement,
+  };
+
+  if (DRY_RUN) {
+    console.log(
+      `[snap] DRY RUN ${snapKey} ${touched.length} activities`,
+      JSON.stringify(head),
+    );
+    return {
+      ok: true,
+      status: "DRY_RUN",
+      snapKey,
+      derKey,
+      touched,
+      headBefore,
+      headAfter: head,
+      derived,
+    };
+  }
+
+  const prevDer = await storage.get(derKey);
+  await storage.set(`${snapKey}_preOverwrite`, b64);
+  await storage.set(`${derKey}_preOverwrite`, prevDer ?? null);
+
+  const out = uint8ArrayToBase64(pako.deflate(JSON.stringify(snap)));
+  // Prove the round-trip before storing. A bad deflate corrupts the only copy
+  // of the form state and Forge storage has no undo.
+  try {
+    JSON.parse(pako.inflate(base64ToUint8Array(out), { to: "string" }));
+  } catch (e) {
+    console.error(`[snap] ROUNDTRIP FAILED for ${snapKey}`, e?.message);
+    return { ok: false, error: "ROUNDTRIP_FAILED", message: e?.message };
+  }
+  await storage.set(snapKey, out);
+  await storage.set(derKey, derived);
+  console.log(`[snap] ${snapKey} patched, ${touched.length} activities`);
+  return {
+    ok: true,
+    status: "WRITTEN",
+    snapKey,
+    derKey,
+    touched,
+    headBefore,
+    headAfter: head,
+    derived,
+  };
+}
 
 export const handler = resolver.getDefinitions();
 export const handler1 = resolver1.getDefinitions();
