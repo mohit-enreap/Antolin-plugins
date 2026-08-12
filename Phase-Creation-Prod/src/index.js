@@ -4266,6 +4266,7 @@ const WRITE_FIELDS = [
 // 471, which is how Create Phase escapes the same 25 second limit.
 resolver.define("applyWrites", async ({ payload }) => {
   const projectKey = payload?.issue?.key;
+  const phaseKey = payload?.phaseKey;
   if (!projectKey || !projectKey.startsWith("CTEST")) {
     return {
       ok: false,
@@ -4273,9 +4274,18 @@ resolver.define("applyWrites", async ({ payload }) => {
       message: "Staging projects only.",
     };
   }
+  // One phase per click. Required, not optional — without it there is no way to
+  // ask for "everything", which is the point.
+  if (!phaseKey) {
+    return {
+      ok: false,
+      error: "NO_PHASE",
+      message: "Open a phase tab before overwriting.",
+    };
+  }
   await overwriteQueue.push(payload);
-  console.log(`[write] queued ${projectKey}`);
-  return { ok: true, queued: true, projectKey };
+  console.log(`[write] queued ${projectKey} phase ${phaseKey}`);
+  return { ok: true, queued: true, projectKey, phaseKey };
 });
 
 // The queue consumer — 900 seconds instead of 25. The body below is unchanged
@@ -4283,6 +4293,8 @@ resolver.define("applyWrites", async ({ payload }) => {
 export async function applyWritesConsumer(event, context) {
   const payload = event?.call?.payload ?? event;
   const projectKey = payload?.issue?.key;
+  const phaseKey = payload?.phaseKey;
+  let phaseLabel = null;
 
   const plan = await buildPlan(payload);
   if (!plan.ok) return plan;
@@ -4343,6 +4355,9 @@ export async function applyWritesConsumer(event, context) {
   }
 
   for (const ph of plan.phases) {
+    // Everything outside the chosen phase is left exactly as it is.
+    if (ph.phaseKey !== phaseKey) continue;
+    phaseLabel = ph.phase;
     for (const row of ph.rows) {
       if (row.action !== "update 4 fields" && row.action !== "clear 4 fields")
         continue;
@@ -4468,11 +4483,18 @@ export async function applyWritesConsumer(event, context) {
   // The receipt is the only record of what each write replaced — Jira keeps no
   // history of these fields and forge logs expire. One key per project,
   // overwritten each run.
+  if (!phaseLabel) {
+    console.warn(`[write] phase ${phaseKey} not found in the plan`);
+    return { ok: false, error: "PHASE_NOT_FOUND", projectKey, phaseKey };
+  }
+
   const record = {
     ok: true,
     at: new Date().toISOString(),
     dryRun: DRY_RUN,
     projectKey,
+    phaseKey,
+    phase: phaseLabel,
     written,
     skipped,
     failed,
@@ -4480,8 +4502,10 @@ export async function applyWritesConsumer(event, context) {
     rollups,
   };
   try {
-    await storage.set(`${projectKey}_lastOverwrite`, record);
-    console.log(`[write] receipt stored for ${projectKey}`);
+    // One receipt per phase. A single project key would let a Serie run erase
+    // the Proto record, and that record holds the only copy of the old values.
+    await storage.set(`${projectKey}_lastOverwrite_${phaseKey}`, record);
+    console.log(`[write] receipt stored for ${projectKey} ${phaseLabel}`);
   } catch (e) {
     console.error(`[write] could not store receipt`, e?.message);
   }
@@ -4612,6 +4636,7 @@ resolver.define("rollupTotals", async ({ payload }) => {
 // Read-only. How the UI learns the queued job finished and what it did.
 resolver.define("getLastOverwrite", async ({ payload }) => {
   const projectKey = payload?.issue?.key;
+  const phaseKey = payload?.phaseKey;
   if (!projectKey || !projectKey.startsWith("CTEST")) {
     return {
       ok: false,
@@ -4619,8 +4644,9 @@ resolver.define("getLastOverwrite", async ({ payload }) => {
       message: "Staging projects only.",
     };
   }
-  const record = await storage.get(`${projectKey}_lastOverwrite`);
-  return { ok: true, projectKey, record: record ?? null };
+  if (!phaseKey) return { ok: true, projectKey, record: null };
+  const record = await storage.get(`${projectKey}_lastOverwrite_${phaseKey}`);
+  return { ok: true, projectKey, phaseKey, record: record ?? null };
 });
 
 export const handler = resolver.getDefinitions();

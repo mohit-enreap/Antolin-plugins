@@ -867,14 +867,22 @@ function App() {
   };
 
   const overwrite = async () => {
+    // The active tab decides which phase is written — Swapnil's flow is one
+    // phase per click, so the button can never touch a tab you are not looking at.
+    const target = phases[tab];
+    const phaseKey = target?.phaseKey;
+    if (!phaseKey) {
+      setError("Run Compare or Plan first, then pick a phase.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       // Remember the current receipt's timestamp so a new one is recognisable.
-      const prev = await invoke("getLastOverwrite", { issue });
+      const prev = await invoke("getLastOverwrite", { issue, phaseKey });
       const prevAt = prev?.record?.at ?? null;
 
-      const res = await invoke("applyWrites", { issue });
+      const res = await invoke("applyWrites", { issue, phaseKey });
       console.log("[write] queued:", res);
       if (!res || res.ok !== true) {
         setError((res && res.message) || "Could not queue the overwrite.");
@@ -885,7 +893,7 @@ function App() {
       // stored one for up to three minutes.
       for (let i = 0; i < 60; i++) {
         await new Promise((r) => setTimeout(r, 3000));
-        const now = await invoke("getLastOverwrite", { issue });
+        const now = await invoke("getLastOverwrite", { issue, phaseKey });
         if (now?.record?.at && now.record.at !== prevAt) {
           console.log("[write] receipt:", now.record);
           return;
@@ -1017,11 +1025,13 @@ function App() {
             <button
               className="cq-btn"
               onClick={overwrite}
-              disabled={busy || !issue}
+              disabled={busy || !issue || !phases[tab]?.phaseKey}
               style={{ background: T.muted }}
-              title="Apply the plan. DRY_RUN is on — nothing is sent."
+              title="Apply the plan for the phase you are looking at."
             >
-              Overwrite
+              {phases[tab]?.phase
+                ? `Overwrite ${phases[tab].phase}`
+                : "Overwrite"}
             </button>
           </div>
           <p style={{ margin: "8px 0 0", fontSize: 12, color: T.faint }}>
