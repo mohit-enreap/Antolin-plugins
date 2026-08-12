@@ -799,6 +799,107 @@ function PlanTable({ rows }) {
   );
 }
 
+/* Phase total — the two numbers.
+   Closed groups are skipped by an overwrite and orphans have no cooked match,
+   so both keep what they have now. Counting their New column would promise a
+   change that will never be written. Add rows count, because Create Phase will
+   create them from the updated snapshot. */
+/* Current is the phase's own Standard Hrs TOT — the number the Gantt shows, so
+   there is one figure to cross-check. New adds only the deltas an Overwrite
+   would actually apply: Locked is skipped by rule 1, Orphan has no cooked
+   match, Same moves nothing, and a vetoed row is cancelled. Adds are rule 2 —
+   Create Phase creates them, not Overwrite — so they are reported separately
+   rather than folded into a total that will never be reached. */
+function phaseTotals(phaseTotal, verdicts, added) {
+  let delta = 0,
+    addHrs = 0;
+  (verdicts || []).forEach((v) => {
+    const k = classify(v.verdict);
+    if (k === "LOCKED" || k === "ORPHAN" || k === "SAME" || k === "NOT_PLANNED")
+      return;
+    if (v.flag) return;
+    const c = isNum(v.currentStd) ? Number(v.currentStd) : 0;
+    const n = isNum(v.newStd) ? Number(v.newStd) : 0;
+    delta += n - c;
+  });
+  (added || []).forEach((a) => {
+    addHrs += isNum(a.newStd) ? Number(a.newStd) : 0;
+  });
+  const cur = isNum(phaseTotal) ? Number(phaseTotal) : null;
+  return {
+    cur: r1(cur),
+    nw: cur === null ? null : r1(cur + delta),
+    add: r1(addHrs),
+  };
+}
+
+function PhaseTotal({ phaseTotal, verdicts, added }) {
+  const { cur, nw, add } = phaseTotals(phaseTotal, verdicts, added);
+  if (cur === null) return null;
+  const d = r1(nw - cur);
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        gap: 10,
+        marginBottom: 14,
+        padding: "9px 14px",
+        background: T.surface,
+        border: `1px solid ${T.line}`,
+        borderRadius: 6,
+        fontSize: 13,
+        color: T.body,
+      }}
+    >
+      <span
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: 0.4,
+          textTransform: "uppercase",
+          color: T.faint,
+        }}
+      >
+        Phase total
+      </span>
+      <strong style={{ color: T.ink, fontVariantNumeric: "tabular-nums" }}>
+        {hrs(cur)}
+      </strong>
+      <span style={{ color: T.faint }}>→</span>
+      <strong
+        style={{
+          color: T.ink,
+          fontVariantNumeric: "tabular-nums",
+          fontSize: 15,
+        }}
+      >
+        {hrs(nw)}
+      </strong>
+      {d === 0 ? (
+        <span style={{ fontSize: 12, color: T.faint }}>no change</span>
+      ) : (
+        <span
+          style={{
+            fontSize: 12,
+            fontWeight: 600,
+            color: d > 0 ? T.linkDark : T.red,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {d > 0 ? `+${d.toFixed(1)}` : d.toFixed(1)}
+        </span>
+      )}
+      {add ? (
+        <span style={{ fontSize: 12, color: T.muted, marginLeft: "auto" }}>
+          plus <strong style={{ color: T.ink }}>{hrs(add)}</strong> to be added
+          by Create Phase
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function App() {
   const [issue, setIssue] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -867,7 +968,7 @@ function App() {
   };
 
   const overwrite = async () => {
-    // The active tab decides which phase is written — Swapnil's flow is one
+    // The active tab decides which phase is written
     // phase per click, so the button can never touch a tab you are not looking at.
     const target = phases[tab];
     const phaseKey = target?.phaseKey;
@@ -910,6 +1011,15 @@ function App() {
   const dump = async () => {
     const res = await invoke("dumpStorage", { issue });
     console.log("[dump] storage:", res);
+  };
+
+  // Cancel returns to the issue screen, same as Create Phase.
+  const close = async () => {
+    try {
+      await view.close();
+    } catch (e) {
+      console.error("[cq] could not close", e?.message);
+    }
   };
 
   /* One tab strip serves both views. Compare returns `result`, plan returns
@@ -1033,6 +1143,18 @@ function App() {
                 ? `Overwrite ${phases[tab].phase}`
                 : "Overwrite"}
             </button>
+            <button
+              className="cq-btn"
+              onClick={close}
+              style={{
+                background: "transparent",
+                color: T.body,
+                border: `1px solid ${T.line}`,
+              }}
+              title="Close and go back to the issue"
+            >
+              Cancel
+            </button>
           </div>
           <p style={{ margin: "8px 0 0", fontSize: 12, color: T.faint }}>
             Version selection arrives with the quotation system.
@@ -1118,6 +1240,11 @@ function App() {
               <div>
                 {active.verdicts && active.verdicts.length ? (
                   <>
+                    <PhaseTotal
+                      phaseTotal={active.phaseTotal}
+                      verdicts={active.verdicts}
+                      added={active.added}
+                    />
                     <Chips verdicts={active.verdicts} />
                     <Table key={active.phase} verdicts={active.verdicts} />
                     <p

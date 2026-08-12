@@ -3793,6 +3793,15 @@ async function runComparison(payload) {
     if (onlyPhaseKey && phase.key !== onlyPhaseKey) continue;
     const phaseName = phase.summary.replace(/^\d+\s*/, "").trim();
 
+    // The phase's own Standard Hrs TOT, so Compare shows the number the Gantt
+    // shows rather than a sum that rounds differently.
+    const phRes = await api
+      .asApp()
+      .requestJira(
+        route`/rest/api/3/issue/${phase.key}?fields=customfield_10061`,
+      );
+    const phaseTotal = (await phRes.json()).fields?.customfield_10061 ?? null;
+
     // Fetch the NEW-side recipe. DEMO: from the blob under COOK_KEY.
     // REAL: replace this one line with the Quot_WO_... storage.get (see
     // resolveNewRevisionKey comment). Shape is identical, so the cook is unchanged.
@@ -3988,6 +3997,7 @@ async function runComparison(payload) {
     result.push({
       phase: phase.summary,
       phaseKey: phase.key,
+      phaseTotal,
       verdicts,
       added,
       cooked,
@@ -4418,6 +4428,55 @@ export async function applyWritesConsumer(event, context) {
     }
   }
 
+  // Sets the phase total the way create-activity line 539 does — from the
+  // snapshot's totalHours, rounded once to one decimal. Keeps the old-code
+  // relationship: Create Phase 3611.71 -> WBS 3611.7, exactly as before.
+  async function setPhaseTotal(key, next) {
+    const res = await api
+      .asApp()
+      .requestJira(route`/rest/api/3/issue/${key}?fields=customfield_10061`);
+    const cur = (await res.json()).fields?.customfield_10061 ?? 0;
+    if (cur === next)
+      return {
+        key,
+        label: "Phase",
+        before: cur,
+        after: next,
+        status: "NO_DIFF",
+      };
+    if (DRY_RUN) {
+      console.log(`[write] DRY RUN Phase ${key} 10061 ${cur} -> ${next}`);
+      return {
+        key,
+        label: "Phase",
+        before: cur,
+        after: next,
+        status: "DRY_RUN",
+      };
+    }
+    try {
+      const put = await retryJiraApiCall(() =>
+        api.asApp().requestJira(route`/rest/api/3/issue/${key}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fields: { customfield_10061: next } }),
+        }),
+      );
+      console.log(`[write] Phase ${key} 10061 ${cur} -> ${next}`);
+      await delay(250);
+      return {
+        key,
+        label: "Phase",
+        before: cur,
+        after: next,
+        status: put?.ok ? "WRITTEN" : `HTTP_${put?.status ?? "NO_RESPONSE"}`,
+      };
+    } catch (e) {
+      console.error(`[write] ERROR Phase ${key}`, e?.message);
+      return { key, label: "Phase", before: cur, after: next, status: "ERROR" };
+    }
+  }
+
   for (const ph of plan.phases) {
     // Everything outside the chosen phase is left exactly as it is.
     if (ph.phaseKey !== phaseKey) continue;
@@ -4529,31 +4588,16 @@ export async function applyWritesConsumer(event, context) {
   plan.phases.forEach((p) => delete p.cooked);
   console.log(`[write] writes done at ${ms()}`);
 
-  const rollups = [];
-  let projectDelta = 0;
-  for (const [phaseKey, delta] of Object.entries(phaseDelta)) {
-    if (!delta) continue;
-    projectDelta += delta;
-    rollups.push(await bump(phaseKey, delta, "Phase"));
-  }
-  // Phases keep the delta so they don't shift by the 0.4 round-once/round-each
-  // drift. The project recomputes: same answer, because the project is exactly
-  // the sum of its phases — but idempotent, so a half-run is repairable.
-  const predicted = {};
-  rollups.forEach((r) => {
-    if (r.label === "Phase") predicted[r.key] = r.after;
-  });
-  if (projectDelta)
-    rollups.push(await rollupProjectTotal(projectKey, predicted));
-  console.log(`[write] rollups done at ${ms()}`);
-
   if (!phaseLabel) {
     console.warn(`[write] phase ${phaseKey} not found in the plan`);
     return { ok: false, error: "PHASE_NOT_FOUND", projectKey, phaseKey };
   }
 
-  // Step 5. Runs after the writes so a snapshot patch can never precede the
-  // Jira change it describes.
+  // Step 5 runs BEFORE the rollups now. create-activity line 539 sets the phase
+  // total from the snapshot: customfield_10061 = Number(totalHours.toFixed(1)).
+  // The rollup below uses the same formula, so the phase total keeps exactly the
+  // relationship to Create Phase that it has always had. It needs the patched
+  // totalHours, so the snapshot has to be written first.
   let snapshot = null;
   try {
     const phaseName = phaseLabel.replace(/^\d+\s*/, "").trim();
@@ -4565,6 +4609,29 @@ export async function applyWritesConsumer(event, context) {
     snapshot = { ok: false, error: "ERROR", message: e?.message };
   }
   console.log(`[write] snapshot done at ${ms()}`);
+
+  const rollups = [];
+  let projectDelta = 0;
+  const snapTotal = snapshot?.headAfter?.totalHours;
+  if (isFinite(snapTotal)) {
+    // Old code's formula, verbatim.
+    rollups.push(await setPhaseTotal(phaseKey, Number(snapTotal.toFixed(1))));
+    projectDelta = 1; // any non-zero: the project must be recomputed
+  } else {
+    // No snapshot to read — fall back to the delta so the phase is not left stale.
+    for (const [pk, delta] of Object.entries(phaseDelta)) {
+      if (!delta) continue;
+      projectDelta += delta;
+      rollups.push(await bump(pk, delta, "Phase"));
+    }
+  }
+  const predicted = {};
+  rollups.forEach((r) => {
+    if (r.label === "Phase") predicted[r.key] = r.after;
+  });
+  if (projectDelta)
+    rollups.push(await rollupProjectTotal(projectKey, predicted));
+  console.log(`[write] rollups done at ${ms()}`);
 
   console.log(
     `[write] DONE dryRun=${DRY_RUN} written=${written} skipped=${skipped} failed=${failed}`,
