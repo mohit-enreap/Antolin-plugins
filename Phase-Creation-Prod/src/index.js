@@ -4593,6 +4593,20 @@ export async function applyWritesConsumer(event, context) {
     return { ok: false, error: "PHASE_NOT_FOUND", projectKey, phaseKey };
   }
 
+  // Step 6 — rule 3. Before the snapshot patch, so only groups that actually
+  // deleted get unticked, and before the rollups, so the phase total already
+  // reflects their removal.
+  const deletions = [];
+  const deletedSummaries = new Set();
+  for (const row of phaseRows) {
+    if (row.action !== "delete group and children") continue;
+    const d = await deleteGroup(row);
+    deletions.push(d);
+    if (d.status === "DELETED" || d.status === "DRY_RUN")
+      deletedSummaries.add(row.summary);
+  }
+  console.log(`[write] deletes done at ${ms()}`);
+
   // Step 5 runs BEFORE the rollups now. create-activity line 539 sets the phase
   // total from the snapshot: customfield_10061 = Number(totalHours.toFixed(1)).
   // The rollup below uses the same formula, so the phase total keeps exactly the
@@ -4602,7 +4616,13 @@ export async function applyWritesConsumer(event, context) {
   try {
     const phaseName = phaseLabel.replace(/^\d+\s*/, "").trim();
     snapshot = phaseCooked
-      ? await patchPhaseSnapshot(projectKey, phaseName, phaseCooked, phaseRows)
+      ? await patchPhaseSnapshot(
+          projectKey,
+          phaseName,
+          phaseCooked,
+          phaseRows,
+          deletedSummaries,
+        )
       : { ok: false, error: "NO_COOK" };
   } catch (e) {
     console.error(`[snap] ERROR`, e?.message);
@@ -4691,6 +4711,7 @@ export async function applyWritesConsumer(event, context) {
     failed,
     receipt,
     rollups,
+    deletions,
     snapshot,
     queuedCreate,
   };
@@ -4906,7 +4927,13 @@ const snapNorm = (s) =>
     .join(" | ")
     .toLowerCase();
 
-async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
+async function patchPhaseSnapshot(
+  projectKey,
+  phaseName,
+  cooked,
+  rows,
+  deletedSummaries,
+) {
   const snapKey = `${projectKey}_${phaseName}`;
   const derKey = `${projectKey}_Industrialization_${phaseName}`;
   const b64 = await storage.get(snapKey);
@@ -4944,9 +4971,16 @@ async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
     // create-activity then builds the Activity Group, Activity, Work Order and
     // Task and links them, exactly as it does on a first run.
     const isAdd = row.action === "create via create phase";
-    // delete, locked and vetoed rows are still left alone — Step 6 owns delete,
-    // and touching them would put storage ahead of Jira.
-    if (!isUpdate && !isClear && !isSame && !isStale && !isAdd) continue;
+    // Step 6 deleted this group, so untick it — same shape as rule 4. Only when
+    // the delete actually succeeded; a skipped or failed one is left alone, or
+    // storage would claim the group is gone while it is still in Jira.
+    const isDeleted =
+      row.action === "delete group and children" &&
+      deletedSummaries &&
+      deletedSummaries.has(row.summary);
+    // locked and vetoed rows are still left alone.
+    if (!isUpdate && !isClear && !isSame && !isStale && !isAdd && !isDeleted)
+      continue;
     const n = snapNorm(row.summary);
     const ak = byNorm[n];
     if (!ak) continue;
@@ -4957,7 +4991,7 @@ async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
       checked: a.checked,
       standardLoop: a.standardLoop,
     };
-    if (isClear || isStale) {
+    if (isClear || isStale || isDeleted) {
       // Unticked at zero. create-activity line 1145 then skips it entirely on a
       // re-run, so 10061 is not rewritten — which is the whole point.
       a.checked = false;
@@ -5073,6 +5107,137 @@ async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
     headAfter: head,
     derived,
   };
+}
+
+// ─── STAGE 2 · STEP 6 — DELETE (rule 3) ──────────────────────────────────────
+// The only irreversible thing this feature does. A field write has a receipt
+// that can restore it; a deleted issue is gone.
+//
+// Rule 3 fires on Not Started with no logged hours — the activity was dropped
+// from the quotation before anyone worked on it, so the group and its Activity,
+// Work Order and Task are removed.
+//
+// Guards, in order:
+//   - the plan's vetoes already excluded config-flag and actual-hours rows
+//   - status and 10065 are re-read here, seconds before the delete, because the
+//     plan was built earlier and a worklog since then flips the whole branch
+//   - every level's worklog is read directly (see the note below)
+//   - only Activity, Work Order and Task are collected by the walk, so the
+//     Incident that Automation links from a Re-Work activity can never be caught
+//   - deepest first, because WBSGantt links are not Jira parent-child — deleting
+//     the group first would orphan everything beneath it
+
+const DELETABLE_TYPES = new Set(["10008", "10009", "10005"]);
+
+async function collectDescendants(issueKey) {
+  const found = [];
+  async function walk(key, depth) {
+    if (depth > 4) return; // AG -> Activity -> WO -> Task, nothing deeper exists
+    const children = await fetchWbsChildren(key);
+    for (const c of children) {
+      if (!DELETABLE_TYPES.has(c.typeId)) continue;
+      found.push({ key: c.key, summary: c.summary, typeId: c.typeId, depth });
+      await walk(c.key, depth + 1);
+    }
+  }
+  await walk(issueKey, 1);
+  return found;
+}
+
+async function deleteGroup(row) {
+  const out = {
+    key: row.key,
+    summary: row.summary,
+    rule: row.rule,
+    deleted: [],
+  };
+
+  // The plan was built at the top of this run. Status can have moved since.
+  const res = await api
+    .asApp()
+    .requestJira(
+      route`/rest/api/3/issue/${row.key}?fields=status,issuetype,customfield_10065`,
+    );
+  const f = (await res.json()).fields || {};
+  if (f.issuetype?.id !== "10019") {
+    out.status = "SKIPPED_NOT_A_GROUP";
+    console.warn(`[del] SKIP ${row.key} — not an Activity Group`);
+    return out;
+  }
+  if (f.status?.name !== "Not Started") {
+    out.status = "SKIPPED_STATUS_MOVED";
+    out.found = f.status?.name;
+    console.warn(`[del] SKIP ${row.key} — status is now ${f.status?.name}`);
+    return out;
+  }
+  const actual = f.customfield_10065 ?? 0;
+  if (actual > 0) {
+    out.status = "SKIPPED_HAS_HOURS";
+    out.found = actual;
+    console.warn(`[del] SKIP ${row.key} — ${actual} actual hours`);
+    return out;
+  }
+
+  const kids = await collectDescendants(row.key);
+
+  // Time can be logged at four levels — updateLog lines 2033-2037:
+  //   Task -> 10081 DE, Work Order -> 10082 COO, Activity -> 10083 TDL,
+  //   and line 2037 accepts the Activity Group itself for TDL as well.
+  // The group's 10065 is their sum, but it only gets there via
+  // propagateActivityHours, which is queued — a worklog added minutes before an
+  // overwrite has not propagated yet. That window is the reason for this check.
+  for (const k of [{ key: row.key, summary: row.summary }].concat(kids)) {
+    const w = await api
+      .asApp()
+      .requestJira(route`/rest/api/3/issue/${k.key}/worklog`);
+    const logs = (await w.json()).worklogs || [];
+    if (logs.length) {
+      out.status = "SKIPPED_WORKLOG";
+      out.found = `${k.key} has ${logs.length} worklog(s)`;
+      console.warn(`[del] SKIP ${row.key} — ${out.found}`);
+      return out;
+    }
+  }
+
+  const order = kids
+    .sort((a, b) => b.depth - a.depth)
+    .concat([
+      { key: row.key, summary: row.summary, typeId: "10019", depth: 0 },
+    ]);
+
+  if (DRY_RUN) {
+    console.log(
+      `[del] DRY RUN ${row.key} would delete ${order.length}:`,
+      order.map((o) => o.key).join(", "),
+    );
+    out.status = "DRY_RUN";
+    out.deleted = order.map((o) => ({ key: o.key, summary: o.summary }));
+    return out;
+  }
+
+  for (const o of order) {
+    try {
+      const del = await retryJiraApiCall(() =>
+        api.asApp().requestJira(route`/rest/api/3/issue/${o.key}`, {
+          method: "DELETE",
+        }),
+      );
+      const ok = del?.ok || del?.status === 204;
+      console.log(`[del] ${ok ? "DELETED" : "FAILED"} ${o.key} ${o.summary}`);
+      out.deleted.push({ key: o.key, summary: o.summary, ok });
+      await delay(1000);
+    } catch (e) {
+      console.error(`[del] ERROR ${o.key}`, e?.message);
+      out.deleted.push({
+        key: o.key,
+        summary: o.summary,
+        ok: false,
+        message: e?.message,
+      });
+    }
+  }
+  out.status = out.deleted.every((d) => d.ok) ? "DELETED" : "PARTIAL";
+  return out;
 }
 
 export const handler = resolver.getDefinitions();
