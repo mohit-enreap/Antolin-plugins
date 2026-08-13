@@ -4322,7 +4322,7 @@ resolver.define("applyPlan", async ({ payload }) => {
 //   - every attempt is returned in a receipt with before, after and status —
 //     the only record of what a write replaced
 
-const DRY_RUN = false;
+const DRY_RUN = true;
 
 const WRITE_FIELDS = [
   { k: "total", cf: "customfield_10061" },
