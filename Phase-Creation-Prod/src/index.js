@@ -4610,6 +4610,45 @@ export async function applyWritesConsumer(event, context) {
   }
   console.log(`[write] snapshot done at ${ms()}`);
 
+  // Step 7, rule 2. The snapshot now has the new activity ticked, so hand the
+  // same base64 to task-queue and create-activity builds the group and its
+  // children — the same path Create Phase uses. Only pushed when something was
+  // actually ticked; re-running create-activity for nothing costs minutes and
+  // touches every group in the phase.
+  let queuedCreate = null;
+  const adds = snapshot?.addedActivities || [];
+  if (adds.length && snapshot?.base64) {
+    if (DRY_RUN) {
+      console.log(
+        `[add] DRY RUN would queue create-activity for ${adds.length}:`,
+        adds.join(", "),
+      );
+      queuedCreate = {
+        status: "DRY_RUN",
+        count: adds.length,
+        activities: adds,
+      };
+    } else {
+      try {
+        await taskQueue.push({
+          issueKey: projectKey,
+          base64Data: snapshot.base64,
+        });
+        console.log(`[add] queued create-activity for ${adds.length}`);
+        queuedCreate = {
+          status: "QUEUED",
+          count: adds.length,
+          activities: adds,
+        };
+      } catch (e) {
+        console.error(`[add] could not queue`, e?.message);
+        queuedCreate = { status: "ERROR", message: e?.message };
+      }
+    }
+  }
+  // The blob is a few hundred KB — never let it into the stored receipt.
+  if (snapshot) delete snapshot.base64;
+
   const rollups = [];
   let projectDelta = 0;
   const snapTotal = snapshot?.headAfter?.totalHours;
@@ -4653,6 +4692,7 @@ export async function applyWritesConsumer(event, context) {
     receipt,
     rollups,
     snapshot,
+    queuedCreate,
   };
   try {
     // One receipt per phase. A single project key would let a Serie run erase
@@ -4885,6 +4925,7 @@ async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
   Object.entries(cooked).forEach(([k, v]) => (cookedByNorm[snapNorm(k)] = v));
 
   const touched = [];
+  const addedActivities = [];
   for (const row of rows) {
     const isUpdate = row.action === "update 4 fields";
     const isClear = row.action === "clear 4 fields";
@@ -4898,9 +4939,14 @@ async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
       !row.veto &&
       String(row.verdict).startsWith("NOT PLANNED") &&
       (row.before?.total ?? null) === null;
-    // delete, add, locked and vetoed rows are left alone — other steps own them,
+    // Step 7, rule 2. The activity exists in the snapshot but is unticked, so
+    // create-activity's line 1145 guard skips it. Ticking it is the whole job —
+    // create-activity then builds the Activity Group, Activity, Work Order and
+    // Task and links them, exactly as it does on a first run.
+    const isAdd = row.action === "create via create phase";
+    // delete, locked and vetoed rows are still left alone — Step 6 owns delete,
     // and touching them would put storage ahead of Jira.
-    if (!isUpdate && !isClear && !isSame && !isStale) continue;
+    if (!isUpdate && !isClear && !isSame && !isStale && !isAdd) continue;
     const n = snapNorm(row.summary);
     const ak = byNorm[n];
     if (!ak) continue;
@@ -4921,6 +4967,21 @@ async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
       a.COO = 0;
       a.DE = 0;
       a.total = 0;
+    } else if (isAdd) {
+      const c = cookedByNorm[n];
+      if (!c) continue;
+      // One standard loop — that is what "in the new quotation" means. The user
+      // can raise it in Create Phase afterwards if the quotation says more.
+      a.checked = true;
+      a.standardLoop = 1;
+      a.standard = c.standard;
+      a.TDL = c.TDL ?? 0;
+      a.COO = c.COO ?? 0;
+      a.DE = c.DE ?? 0;
+      a.total = a.standard;
+      // 2D activities carry a drawing count into customfield_10059.
+      if (c.loop !== undefined) a.loop = c.loop;
+      addedActivities.push(ak);
     } else {
       const c = cookedByNorm[n];
       if (!c) continue;
@@ -4959,9 +5020,13 @@ async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
     dataManagement: head.dataManagement,
   };
 
+  // Built before the dry-run exit so a dry run also proves the round-trip, and
+  // so Step 7 can report the payload it would push.
+  const out = uint8ArrayToBase64(pako.deflate(JSON.stringify(snap)));
+
   if (DRY_RUN) {
     console.log(
-      `[snap] DRY RUN ${snapKey} ${touched.length} activities`,
+      `[snap] DRY RUN ${snapKey} ${touched.length} activities, ${addedActivities.length} to add`,
       JSON.stringify(head),
     );
     return {
@@ -4970,6 +5035,8 @@ async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
       snapKey,
       derKey,
       touched,
+      addedActivities,
+      base64: out,
       headBefore,
       headAfter: head,
       derived,
@@ -4979,8 +5046,8 @@ async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
   const prevDer = await storage.get(derKey);
   await storage.set(`${snapKey}_preOverwrite`, b64);
   await storage.set(`${derKey}_preOverwrite`, prevDer ?? null);
+  await storage.set(`${derKey}_preOverwrite`, prevDer ?? null);
 
-  const out = uint8ArrayToBase64(pako.deflate(JSON.stringify(snap)));
   // Prove the round-trip before storing. A bad deflate corrupts the only copy
   // of the form state and Forge storage has no undo.
   try {
@@ -4991,13 +5058,17 @@ async function patchPhaseSnapshot(projectKey, phaseName, cooked, rows) {
   }
   await storage.set(snapKey, out);
   await storage.set(derKey, derived);
-  console.log(`[snap] ${snapKey} patched, ${touched.length} activities`);
+  console.log(
+    `[snap] ${snapKey} patched, ${touched.length} activities, ${addedActivities.length} to add`,
+  );
   return {
     ok: true,
     status: "WRITTEN",
     snapKey,
     derKey,
     touched,
+    addedActivities,
+    base64: out,
     headBefore,
     headAfter: head,
     derived,
