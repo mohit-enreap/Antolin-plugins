@@ -3724,6 +3724,27 @@ async function cookForPhase(projectKey, phaseName) {
   return cooked;
 }
 
+// A group with no standard hours is either an Extra Work / Re-Work group, or a
+// standard group whose hours rule 4 cleared. 10061 being null cannot tell them
+// apart — only the children can. processLoops appends "| Extra Work" or
+// "| Re-Work" to the summary at the Activity, Work Order and Task level
+// (lines 974, 1056, 1086), so the whole branch is identifiable.
+//
+// Create Phase builds an EW/RW group in two passes: tick the activity with
+// standardLoop 0 and Create, which makes a bare group; reopen, set the extra
+// work or rework loops, and Create again, which fills it in. So an EW/RW group
+// is one whose Activity children ALL carry the suffix.
+const EWRW_SUFFIX = /\|\s*(Extra Work|Re-Work)\s*$/i;
+
+async function classifyNullGroup(agKey) {
+  const kids = await fetchWbsChildren(agKey);
+  const acts = kids.filter((c) => c.typeId === "10008");
+  let ewrw = 0,
+    std = 0;
+  acts.forEach((a) => (EWRW_SUFFIX.test(a.summary) ? ewrw++ : std++));
+  return { ewrw, std, isEwRw: ewrw > 0 && std === 0, total: acts.length };
+}
+
 // The comparison body, extracted so Stage 2 can call the SAME code the UI calls.
 // A copy would drift the moment one side changed; one implementation cannot.
 async function runComparison(payload) {
@@ -3841,10 +3862,17 @@ async function runComparison(payload) {
           route`/rest/api/3/issue/${ag.key}?fields=summary,status,customfield_10061,customfield_10075,customfield_10076,customfield_10077`,
         );
       const f = (await res.json()).fields;
+      // Only for groups with no standard hours — one extra fetch each, and
+      // there are rarely more than one or two per phase.
+      const ewrwInfo =
+        (f.customfield_10061 ?? null) === null
+          ? await classifyNullGroup(ag.key)
+          : null;
       agRows.push({
         key: ag.key,
         summary: f.summary,
         status: f.status?.name || null,
+        ewrw: ewrwInfo,
         currentStd: f.customfield_10061 ?? null,
         currentCOO: f.customfield_10075 ?? null,
         currentDE: f.customfield_10076 ?? null,
@@ -3914,6 +3942,13 @@ async function runComparison(payload) {
       let verdict;
       if (isClosed) {
         verdict = "LOCKED (closed — skip)";
+      } else if (cur === null && ag.ewrw?.isEwRw) {
+        // Swapnil: treat these like a standard group. The quotation decides
+        // whether the activity exists at all; the extra work loops go with it.
+        verdict =
+          nw > 0
+            ? "ADD STANDARD (extra work group)"
+            : "REMOVE (extra work group)";
       } else if (cur === null) {
         verdict = "NOT PLANNED (no baseline)";
       } else if (nw === cur && rolesSame) {
@@ -4107,6 +4142,7 @@ const PLAN_ACTION = {
   CLEAR: "clear 4 fields",
   DELETE: "delete group and children",
   ADD: "create via create phase",
+  REPLACE_EWRW: "delete extra work, add standard",
   NONE: "no action",
 };
 
@@ -4120,6 +4156,32 @@ function resolvePlanRule(row) {
 
   if (status === "Closed")
     return { rule: 1, action: PLAN_ACTION.SKIP, why: "group is closed" };
+  // Extra work groups. Closing a branch and reopening a group are transitions,
+  // which is its own step — those cases plan as no action for now and say so.
+  if (v.startsWith("REMOVE (extra work"))
+    return started
+      ? {
+          rule: 4,
+          action: PLAN_ACTION.NONE,
+          why: "extra work dropped, work started — closing needs the transition step",
+        }
+      : {
+          rule: 3,
+          action: PLAN_ACTION.DELETE,
+          why: "extra work dropped from the quotation, not started",
+        };
+  if (v.startsWith("ADD STANDARD"))
+    return started
+      ? {
+          rule: 2,
+          action: PLAN_ACTION.NONE,
+          why: "standard added to an extra work group in progress — needs the transition step",
+        }
+      : {
+          rule: 2,
+          action: PLAN_ACTION.REPLACE_EWRW,
+          why: "standard added, extra work not started",
+        };
   if (v.startsWith("NOT PLANNED"))
     return { rule: 7, action: PLAN_ACTION.NONE, why: "no baseline hours" };
   if (v.startsWith("ORPHAN"))
@@ -4221,6 +4283,9 @@ async function buildPlan(payload) {
         after = { total: v.newStd, TDL: v.newTDL, COO: v.newCOO, DE: v.newDE };
       if (action === PLAN_ACTION.CLEAR)
         after = { total: null, TDL: null, COO: null, DE: null };
+      // The group exists with no standard hours; these are the ones to write.
+      if (action === PLAN_ACTION.REPLACE_EWRW)
+        after = { total: v.newStd, TDL: v.newTDL, COO: v.newCOO, DE: v.newDE };
 
       counts[action] = (counts[action] || 0) + 1;
       if (action !== PLAN_ACTION.NONE && action !== PLAN_ACTION.SKIP)
@@ -4484,7 +4549,11 @@ export async function applyWritesConsumer(event, context) {
     phaseRows = ph.rows;
     phaseCooked = ph.cooked || null;
     for (const row of ph.rows) {
-      if (row.action !== "update 4 fields" && row.action !== "clear 4 fields")
+      if (
+        row.action !== "update 4 fields" &&
+        row.action !== "clear 4 fields" &&
+        row.action !== "delete extra work, add standard"
+      )
         continue;
 
       // Re-read. The plan showed the user `before`; refuse to overwrite
@@ -4607,6 +4676,19 @@ export async function applyWritesConsumer(event, context) {
   }
   console.log(`[write] deletes done at ${ms()}`);
 
+  // Ruling 1.5. After the deletes, so both destructive passes are finished
+  // before the snapshot is touched.
+  const replacements = [];
+  const replacedSummaries = new Set();
+  for (const row of phaseRows) {
+    if (row.action !== "delete extra work, add standard") continue;
+    const r = await replaceEwRw(row);
+    replacements.push(r);
+    if (["REPLACED", "DRY_RUN", "NOTHING_TO_DELETE"].includes(r.status))
+      replacedSummaries.add(row.summary);
+  }
+  console.log(`[write] extra work replacements done at ${ms()}`);
+
   // Step 5 runs BEFORE the rollups now. create-activity line 539 sets the phase
   // total from the snapshot: customfield_10061 = Number(totalHours.toFixed(1)).
   // The rollup below uses the same formula, so the phase total keeps exactly the
@@ -4622,6 +4704,7 @@ export async function applyWritesConsumer(event, context) {
           phaseCooked,
           phaseRows,
           deletedSummaries,
+          replacedSummaries,
         )
       : { ok: false, error: "NO_COOK" };
   } catch (e) {
@@ -4712,6 +4795,7 @@ export async function applyWritesConsumer(event, context) {
     receipt,
     rollups,
     deletions,
+    replacements,
     snapshot,
     queuedCreate,
   };
@@ -4933,6 +5017,7 @@ async function patchPhaseSnapshot(
   cooked,
   rows,
   deletedSummaries,
+  replacedSummaries,
 ) {
   const snapKey = `${projectKey}_${phaseName}`;
   const derKey = `${projectKey}_Industrialization_${phaseName}`;
@@ -4971,6 +5056,11 @@ async function patchPhaseSnapshot(
     // create-activity then builds the Activity Group, Activity, Work Order and
     // Task and links them, exactly as it does on a first run.
     const isAdd = row.action === "create via create phase";
+    // Ruling 1.5 — same as an add, but the extra work loops go too.
+    const isReplace =
+      row.action === "delete extra work, add standard" &&
+      replacedSummaries &&
+      replacedSummaries.has(row.summary);
     // Step 6 deleted this group, so untick it — same shape as rule 4. Only when
     // the delete actually succeeded; a skipped or failed one is left alone, or
     // storage would claim the group is gone while it is still in Jira.
@@ -4979,7 +5069,15 @@ async function patchPhaseSnapshot(
       deletedSummaries &&
       deletedSummaries.has(row.summary);
     // locked and vetoed rows are still left alone.
-    if (!isUpdate && !isClear && !isSame && !isStale && !isAdd && !isDeleted)
+    if (
+      !isUpdate &&
+      !isClear &&
+      !isSame &&
+      !isStale &&
+      !isAdd &&
+      !isDeleted &&
+      !isReplace
+    )
       continue;
     const n = snapNorm(row.summary);
     const ak = byNorm[n];
@@ -5001,7 +5099,15 @@ async function patchPhaseSnapshot(
       a.COO = 0;
       a.DE = 0;
       a.total = 0;
-    } else if (isAdd) {
+      if (isDeleted) {
+        // Rule 3 removed the group and every child, extra work included. Line
+        // 1142 only skips when EVERY loop is zero, so leaving these behind makes
+        // create-activity rebuild the group and its Re-Work branch — which is
+        // what put 105 back after the last run.
+        a.extraWorkLoop = 0;
+        a.reWorkLoop = 0;
+      }
+    } else if (isAdd || isReplace) {
       const c = cookedByNorm[n];
       if (!c) continue;
       // One standard loop — that is what "in the new quotation" means. The user
@@ -5013,6 +5119,13 @@ async function patchPhaseSnapshot(
       a.COO = c.COO ?? 0;
       a.DE = c.DE ?? 0;
       a.total = a.standard;
+      if (isReplace) {
+        // The extra work branch has just been deleted from Jira. Leaving the
+        // loops here would make create-activity rebuild it on the next run,
+        // because line 1142 only skips when EVERY loop is zero.
+        a.extraWorkLoop = 0;
+        a.reWorkLoop = 0;
+      }
       // 2D activities carry a drawing count into customfield_10059.
       if (c.loop !== undefined) a.loop = c.loop;
       addedActivities.push(ak);
@@ -5079,7 +5192,6 @@ async function patchPhaseSnapshot(
 
   const prevDer = await storage.get(derKey);
   await storage.set(`${snapKey}_preOverwrite`, b64);
-  await storage.set(`${derKey}_preOverwrite`, prevDer ?? null);
   await storage.set(`${derKey}_preOverwrite`, prevDer ?? null);
 
   // Prove the round-trip before storing. A bad deflate corrupts the only copy
@@ -5237,6 +5349,97 @@ async function deleteGroup(row) {
     }
   }
   out.status = out.deleted.every((d) => d.ok) ? "DELETED" : "PARTIAL";
+  return out;
+}
+
+// Ruling 1.5 — the quotation has brought this activity back into standard scope
+// and nothing has started, so the extra work planned in its place is redundant.
+// The GROUP survives, because the standard Activity is about to be created in it.
+// Same guards as deleteGroup: this destroys issues.
+async function replaceEwRw(row) {
+  const out = {
+    key: row.key,
+    summary: row.summary,
+    rule: row.rule,
+    deleted: [],
+  };
+  const res = await api
+    .asApp()
+    .requestJira(
+      route`/rest/api/3/issue/${row.key}?fields=status,issuetype,customfield_10065`,
+    );
+  const f = (await res.json()).fields || {};
+  if (f.issuetype?.id !== "10019") {
+    out.status = "SKIPPED_NOT_A_GROUP";
+    return out;
+  }
+  if (f.status?.name !== "Not Started") {
+    out.status = "SKIPPED_STATUS_MOVED";
+    out.found = f.status?.name;
+    console.warn(`[ewrw] SKIP ${row.key} — status is now ${f.status?.name}`);
+    return out;
+  }
+  const actual = f.customfield_10065 ?? 0;
+  if (actual > 0) {
+    out.status = "SKIPPED_HAS_HOURS";
+    out.found = actual;
+    console.warn(`[ewrw] SKIP ${row.key} — ${actual} actual hours`);
+    return out;
+  }
+
+  // Only the extra work and rework branch. processLoops puts the suffix on the
+  // Activity, Work Order and Task alike, so this reaches all three levels.
+  const kids = (await collectDescendants(row.key)).filter((k) =>
+    EWRW_SUFFIX.test(k.summary),
+  );
+  if (!kids.length) {
+    out.status = "NOTHING_TO_DELETE";
+    return out;
+  }
+  for (const k of kids) {
+    const w = await api
+      .asApp()
+      .requestJira(route`/rest/api/3/issue/${k.key}/worklog`);
+    if (((await w.json()).worklogs || []).length) {
+      out.status = "SKIPPED_WORKLOG";
+      out.found = `${k.key} has worklog(s)`;
+      console.warn(`[ewrw] SKIP ${row.key} — ${out.found}`);
+      return out;
+    }
+  }
+
+  const order = kids.sort((a, b) => b.depth - a.depth);
+  if (DRY_RUN) {
+    console.log(
+      `[ewrw] DRY RUN ${row.key} would delete ${order.length}:`,
+      order.map((o) => o.key).join(", "),
+    );
+    out.status = "DRY_RUN";
+    out.deleted = order.map((o) => ({ key: o.key, summary: o.summary }));
+    return out;
+  }
+  for (const o of order) {
+    try {
+      const del = await retryJiraApiCall(() =>
+        api.asApp().requestJira(route`/rest/api/3/issue/${o.key}`, {
+          method: "DELETE",
+        }),
+      );
+      const ok = del?.ok || del?.status === 204;
+      console.log(`[ewrw] ${ok ? "DELETED" : "FAILED"} ${o.key} ${o.summary}`);
+      out.deleted.push({ key: o.key, summary: o.summary, ok });
+      await delay(1000);
+    } catch (e) {
+      console.error(`[ewrw] ERROR ${o.key}`, e?.message);
+      out.deleted.push({
+        key: o.key,
+        summary: o.summary,
+        ok: false,
+        message: e?.message,
+      });
+    }
+  }
+  out.status = out.deleted.every((d) => d.ok) ? "REPLACED" : "PARTIAL";
   return out;
 }
 

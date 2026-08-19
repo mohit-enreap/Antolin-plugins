@@ -559,6 +559,11 @@ const ACTION_STYLE = {
     bg: "#C9372C",
   },
   "create via create phase": { label: "Add", fg: "#5E4DB2", bg: "#F3F0FF" },
+  "delete extra work, add standard": {
+    label: "Replace EW",
+    fg: "#5E4DB2",
+    bg: "#F3F0FF",
+  },
   "no action": { label: "None", fg: "#8993A4", bg: "#F1F2F4" },
 };
 
@@ -642,6 +647,10 @@ function PlanDetailRows({ row }) {
   if (row.action === "create via create phase")
     notes.push(
       "Created by re-running Create Phase from the updated snapshot, not written here.",
+    );
+  if (row.action === "delete extra work, add standard")
+    notes.push(
+      "The extra work and rework activities are deleted. The group is kept and the standard activity is created in it by Create Phase.",
     );
 
   const accent = { boxShadow: `inset 3px 0 0 ${T.line}` };
