@@ -821,7 +821,8 @@ function PlanTable({ rows }) {
    rather than folded into a total that will never be reached. */
 function phaseTotals(phaseTotal, verdicts, added) {
   let delta = 0,
-    addHrs = 0;
+    addHrs = 0,
+    deferredHrs = 0;
   (verdicts || []).forEach((v) => {
     const k = classify(v.verdict);
     if (k === "LOCKED" || k === "ORPHAN" || k === "SAME" || k === "NOT_PLANNED")
@@ -829,6 +830,15 @@ function phaseTotals(phaseTotal, verdicts, added) {
     if (v.flag) return;
     const c = isNum(v.currentStd) ? Number(v.currentStd) : 0;
     const n = isNum(v.newStd) ? Number(v.newStd) : 0;
+    // An extra work group that has already started plans as no action — closing
+    // the branch and setting the group back to Not Started are transitions,
+    // which is a separate step. Report it beside the total, not inside it.
+    const started =
+      v.status === "In Progress" || v.status === "Submit for Approval";
+    if (started && !isNum(v.currentStd)) {
+      deferredHrs += n;
+      return;
+    }
     delta += n - c;
   });
   (added || []).forEach((a) => {
@@ -839,11 +849,12 @@ function phaseTotals(phaseTotal, verdicts, added) {
     cur: r1(cur),
     nw: cur === null ? null : r1(cur + delta),
     add: r1(addHrs),
+    deferred: r1(deferredHrs),
   };
 }
 
 function PhaseTotal({ phaseTotal, verdicts, added }) {
-  const { cur, nw, add } = phaseTotals(phaseTotal, verdicts, added);
+  const { cur, nw, add, deferred } = phaseTotals(phaseTotal, verdicts, added);
   if (cur === null) return null;
   const d = r1(nw - cur);
   return (
@@ -899,10 +910,21 @@ function PhaseTotal({ phaseTotal, verdicts, added }) {
           {d > 0 ? `+${d.toFixed(1)}` : d.toFixed(1)}
         </span>
       )}
-      {add ? (
+      {add || deferred ? (
         <span style={{ fontSize: 12, color: T.muted, marginLeft: "auto" }}>
-          plus <strong style={{ color: T.ink }}>{hrs(add)}</strong> to be added
-          by Create Phase
+          {add ? (
+            <>
+              plus <strong style={{ color: T.ink }}>{hrs(add)}</strong> to be
+              added by Create Phase
+            </>
+          ) : null}
+          {add && deferred ? <span style={{ color: T.faint }}> · </span> : null}
+          {deferred ? (
+            <>
+              plus <strong style={{ color: T.ink }}>{hrs(deferred)}</strong>{" "}
+              once the transition step lands
+            </>
+          ) : null}
         </span>
       ) : null}
     </div>
