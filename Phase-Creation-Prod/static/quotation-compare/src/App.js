@@ -564,6 +564,7 @@ const ACTION_STYLE = {
     fg: "#5E4DB2",
     bg: "#F3F0FF",
   },
+  "close the branch": { label: "Close", fg: "#974F0C", bg: "#FFF7D6" },
   "no action": { label: "None", fg: "#8993A4", bg: "#F1F2F4" },
 };
 
@@ -647,6 +648,10 @@ function PlanDetailRows({ row }) {
   if (row.action === "create via create phase")
     notes.push(
       "Created by re-running Create Phase from the updated snapshot, not written here.",
+    );
+  if (row.action === "close the branch")
+    notes.push(
+      "The extra work and rework activities are closed, keeping their logged hours. The group is left as it is and nothing is deleted.",
     );
   if (row.action === "delete extra work, add standard")
     notes.push(
@@ -1044,6 +1049,14 @@ function App() {
     console.log("[dump] storage:", res);
   };
 
+  // Temporary, for the transition step: what can each issue type actually do
+  // from each status it is in. Read-only.
+  const workflow = async () => {
+    const phaseKey = phases[tab]?.phaseKey;
+    const res = await invoke("dumpTransitions", { issue, phaseKey });
+    console.log("[wf] transitions:", res);
+  };
+
   // Cancel returns to the issue screen, same as Create Phase.
   const close = async () => {
     try {
@@ -1153,6 +1166,15 @@ function App() {
               title="Print stored Create Phase data to the browser console"
             >
               Storage
+            </button>
+            <button
+              className="cq-btn"
+              onClick={workflow}
+              disabled={!issue || !phases[tab]?.phaseKey}
+              style={{ background: T.muted }}
+              title="Print the available transitions per issue type and status"
+            >
+              Workflow
             </button>
             <button
               className="cq-btn"

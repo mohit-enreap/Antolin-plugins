@@ -4123,6 +4123,122 @@ resolver.define("dumpStorage", async ({ payload }) => {
   return out;
 });
 
+// ─── WORKFLOW STUDY (read-only) — never performs a transition ────────────────
+// The transition step needs transition IDs, and those differ per workflow
+// scheme AND per current status. Hardcoding one would break the moment CWO's
+// scheme differs from CTEST's, so this asks Jira instead.
+//
+// GET /transitions is a read. Performing one is a POST, which this never makes.
+// It also returns only what the APP can do, so conditions and validators that
+// would block us are already filtered out — this is the real answer, not the
+// workflow diagram's.
+resolver.define("dumpTransitions", async ({ payload }) => {
+  const projectKey = payload?.issue?.key;
+  const phaseKey = payload?.phaseKey;
+  if (!projectKey || !projectKey.startsWith("CTEST")) {
+    return {
+      ok: false,
+      error: "NOT_ALLOWED",
+      message: "Staging projects only.",
+    };
+  }
+  if (!phaseKey) {
+    return {
+      ok: false,
+      error: "NO_PHASE",
+      message: "Open a phase tab first.",
+    };
+  }
+
+  const TYPE = {
+    10019: "Activity Group",
+    10008: "Activity",
+    10009: "Work Order",
+    10005: "Task",
+  };
+  // One sample per type+status pair is enough — the answer depends on the
+  // workflow and the current status, not on which issue we ask.
+  const seen = new Map();
+  let calls = 0;
+  const BUDGET = 40; // this runs in a resolver: 25 seconds, not 900
+
+  async function readStatus(key) {
+    calls++;
+    const r = await api
+      .asApp()
+      .requestJira(route`/rest/api/3/issue/${key}?fields=status,issuetype`);
+    const f = (await r.json()).fields || {};
+    return { status: f.status?.name || null, typeId: f.issuetype?.id || null };
+  }
+
+  async function walk(key, depth) {
+    if (depth > 4 || calls > BUDGET) return;
+    calls++;
+    const kids = await fetchWbsChildren(key);
+    for (const c of kids) {
+      if (!TYPE[c.typeId]) continue;
+      const s = await readStatus(c.key);
+      const pair = `${c.typeId}|${s.status}`;
+      if (!seen.has(pair))
+        seen.set(pair, {
+          key: c.key,
+          summary: c.summary,
+          typeId: c.typeId,
+          status: s.status,
+        });
+      if (calls > BUDGET) return;
+      await walk(c.key, depth + 1);
+    }
+  }
+  await walk(phaseKey, 1);
+
+  const pairs = [];
+  for (const [, s] of seen) {
+    // expand=transitions.fields returns the transition SCREEN and which of its
+    // fields are required. Conditions decide whether a transition is offered;
+    // validators reject it at POST time. Without this we would plan a close
+    // that Jira then refuses because Start date is empty.
+    const r = await api
+      .asApp()
+      .requestJira(
+        route`/rest/api/3/issue/${s.key}/transitions?expand=transitions.fields`,
+      );
+    const body = await r.json();
+    pairs.push({
+      type: TYPE[s.typeId],
+      from: s.status,
+      sample: s.key,
+      transitions: (body.transitions || []).map((t) => ({
+        id: t.id,
+        name: t.name,
+        to: t.to?.name,
+        hasScreen: Boolean(t.hasScreen),
+        required: Object.entries(t.fields || {})
+          .filter(([, f]) => f.required)
+          .map(([id, f]) => `${f.name} (${id})`),
+      })),
+    });
+  }
+  pairs.sort((a, b) => (a.type + a.from).localeCompare(b.type + b.from));
+
+  console.log(
+    `[wf] ${projectKey} — ${pairs.length} type/status pairs, ${calls} walk calls`,
+  );
+  pairs.forEach((p) =>
+    console.log(
+      `[wf] ${p.type} @ ${p.from} (${p.sample}): ` +
+        (p.transitions
+          .map(
+            (t) =>
+              `${t.id}=${t.name}->${t.to}` +
+              (t.required.length ? ` REQUIRES[${t.required.join(", ")}]` : ""),
+          )
+          .join("  ") || "NONE"),
+    ),
+  );
+  return { ok: true, projectKey, phaseKey, pairs };
+});
+
 // ─── STAGE 2 · STEP 1 — APPLY PLAN (read-only) ───────────────────────────────
 // Turns a comparison into the list of writes it implies, recording the BEFORE
 // value of every field beside the AFTER.
@@ -4143,6 +4259,7 @@ const PLAN_ACTION = {
   DELETE: "delete group and children",
   ADD: "create via create phase",
   REPLACE_EWRW: "delete extra work, add standard",
+  CLOSE_BRANCH: "close the branch",
   NONE: "no action",
 };
 
@@ -4162,8 +4279,8 @@ function resolvePlanRule(row) {
     return started
       ? {
           rule: 4,
-          action: PLAN_ACTION.NONE,
-          why: "extra work dropped, work started — closing needs the transition step",
+          action: PLAN_ACTION.CLOSE_BRANCH,
+          why: "extra work dropped from the quotation, work started",
         }
       : {
           rule: 3,
@@ -4254,7 +4371,9 @@ async function buildPlan(payload) {
       // de-scope — the safeguard flag vetoes it.
       if (
         v.flag &&
-        (r.action === PLAN_ACTION.DELETE || r.action === PLAN_ACTION.CLEAR)
+        (r.action === PLAN_ACTION.DELETE ||
+          r.action === PLAN_ACTION.CLEAR ||
+          r.action === PLAN_ACTION.CLOSE_BRANCH)
       ) {
         veto = `config flag ${v.flag}`;
       }
@@ -4387,7 +4506,7 @@ resolver.define("applyPlan", async ({ payload }) => {
 //   - every attempt is returned in a receipt with before, after and status —
 //     the only record of what a write replaced
 
-const DRY_RUN = true;
+const DRY_RUN = false;
 
 const WRITE_FIELDS = [
   { k: "total", cf: "customfield_10061" },
@@ -4689,6 +4808,18 @@ export async function applyWritesConsumer(event, context) {
   }
   console.log(`[write] extra work replacements done at ${ms()}`);
 
+  // Ruling 1.2 — the extra work is gone from the quotation but somebody has
+  // started it, so the branch is closed rather than deleted and the group is
+  // left where it is. After the replacements, so both destructive passes are
+  // finished. Nothing is written to the snapshot for this case: the branches
+  // still exist in Jira, so the stored loops still match what is there.
+  const closures = [];
+  for (const row of phaseRows) {
+    if (row.action !== "close the branch") continue;
+    closures.push(await closeBranch(row.key));
+  }
+  console.log(`[write] closures done at ${ms()}`);
+
   // Step 5 runs BEFORE the rollups now. create-activity line 539 sets the phase
   // total from the snapshot: customfield_10061 = Number(totalHours.toFixed(1)).
   // The rollup below uses the same formula, so the phase total keeps exactly the
@@ -4796,6 +4927,7 @@ export async function applyWritesConsumer(event, context) {
     rollups,
     deletions,
     replacements,
+    closures,
     snapshot,
     queuedCreate,
   };
@@ -5441,6 +5573,111 @@ async function replaceEwRw(row) {
   }
   out.status = out.deleted.every((d) => d.ok) ? "REPLACED" : "PARTIAL";
   return out;
+}
+
+// ─── STAGE 2 · STEP 10 — TRANSITIONS ─────────────────────────────────────────
+// Ajinkya made a second copy of each transition for the app, condition-free and
+// hidden from users; the manual copies keep their conditions. So /transitions
+// under asApp returns exactly the set we are allowed to drive, and the date
+// requirement seen when closing an Activity by hand is on the manual copy.
+//
+// Never hardcode an id. They are per workflow AND per status, and they collide
+// across types: id 2 is Close on the Activity Group and Approve on the Activity.
+// Never match on `name` either — the scheme has 'In Progress  ' with two
+// trailing spaces on the group and 'In Progress ' with one on the Activity.
+// Match on to.name, fetched per issue, every time.
+async function transitionTo(key, targetStatus) {
+  const cur = await api
+    .asApp()
+    .requestJira(route`/rest/api/3/issue/${key}?fields=status,summary`);
+  const f = (await cur.json()).fields || {};
+  const from = f.status?.name || null;
+  const out = { key, summary: f.summary, from, to: targetStatus };
+
+  if (from === targetStatus) {
+    out.status = "ALREADY";
+    return out;
+  }
+
+  const list = await api
+    .asApp()
+    .requestJira(route`/rest/api/3/issue/${key}/transitions`);
+  const ts = (await list.json()).transitions || [];
+  const hit = ts.find((t) => t.to?.name === targetStatus);
+  if (!hit) {
+    // No path in one step. Do not invent a route through another status —
+    // which intermediate status is acceptable is a workflow decision, not ours.
+    out.status = "NO_TRANSITION";
+    out.available = ts.map((t) => `${t.id}=${t.name}->${t.to?.name}`);
+    console.warn(`[trn] NO PATH ${key} ${from} -> ${targetStatus}`);
+    return out;
+  }
+  out.id = hit.id;
+  out.name = hit.name;
+
+  if (DRY_RUN) {
+    console.log(
+      `[trn] DRY RUN ${key} ${from} -> ${targetStatus} via ${hit.id}`,
+    );
+    out.status = "DRY_RUN";
+    return out;
+  }
+  try {
+    const res = await retryJiraApiCall(() =>
+      api.asApp().requestJira(route`/rest/api/3/issue/${key}/transitions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transition: { id: hit.id } }),
+      }),
+    );
+    out.httpStatus = res?.status;
+    if (res?.status === 204) {
+      out.status = "MOVED";
+      console.log(`[trn] ${key} ${from} -> ${targetStatus} via ${hit.id}`);
+    } else {
+      // A validator rejects HERE, not at /transitions — no API reports them.
+      // Carry the body so the receipt names the field it wanted.
+      out.status = "REJECTED";
+      try {
+        out.body = await res.json();
+      } catch (e) {
+        out.body = null;
+      }
+      console.error(
+        `[trn] REJECTED ${key} HTTP ${res?.status}`,
+        JSON.stringify(out.body),
+      );
+    }
+    await delay(500);
+  } catch (e) {
+    out.status = "ERROR";
+    out.message = e?.message;
+    console.error(`[trn] ERROR ${key}`, e?.message);
+  }
+  return out;
+}
+
+// Deepest first, and STOP at the first failure. A half-closed branch is worse
+// than an untouched one: areAllDescendantsClosed keeps returning false, so
+// 10971 never settles and the group sits in a state nobody chose.
+async function closeBranch(agKey) {
+  const kids = await collectDescendants(agKey);
+  const order = kids
+    .sort((a, b) => b.depth - a.depth)
+    .concat([{ key: agKey, depth: 0 }]);
+  const moves = [];
+  for (const o of order) {
+    const m = await transitionTo(o.key, "Closed");
+    moves.push(m);
+    if (!["MOVED", "DRY_RUN", "ALREADY"].includes(m.status)) {
+      console.warn(`[trn] cascade stopped at ${o.key} (${m.status})`);
+      break;
+    }
+  }
+  const done = moves.every((m) =>
+    ["MOVED", "DRY_RUN", "ALREADY"].includes(m.status),
+  );
+  return { agKey, status: done ? "CLOSED" : "PARTIAL", moves };
 }
 
 export const handler = resolver.getDefinitions();
