@@ -565,6 +565,11 @@ const ACTION_STYLE = {
     bg: "#F3F0FF",
   },
   "close the branch": { label: "Close", fg: "#974F0C", bg: "#FFF7D6" },
+  "clear hours and close": {
+    label: "Clear + close",
+    fg: "#974F0C",
+    bg: "#FFF7D6",
+  },
   "no action": { label: "None", fg: "#8993A4", bg: "#F1F2F4" },
 };
 
@@ -656,6 +661,10 @@ function PlanDetailRows({ row }) {
   if (row.action === "delete extra work, add standard")
     notes.push(
       "The extra work and rework activities are deleted. The group is kept and the standard activity is created in it by Create Phase.",
+    );
+  if (row.action === "clear hours and close")
+    notes.push(
+      "The four hour fields are emptied and the whole branch is closed. Logged hours are kept and nothing is deleted.",
     );
 
   const accent = { boxShadow: `inset 3px 0 0 ${T.line}` };
@@ -1113,7 +1122,7 @@ function App() {
         </h1>
         <p style={{ margin: "4px 0 0", fontSize: 13, color: T.muted }}>
           Preview how this project's hours would change against a newer
-          quotation. Nothing is written.
+          quotation.
         </p>
 
         {/* toolbar */}

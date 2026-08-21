@@ -4260,6 +4260,7 @@ const PLAN_ACTION = {
   ADD: "create via create phase",
   REPLACE_EWRW: "delete extra work, add standard",
   CLOSE_BRANCH: "close the branch",
+  CLEAR_AND_CLOSE: "clear hours and close",
   NONE: "no action",
 };
 
@@ -4313,7 +4314,7 @@ function resolvePlanRule(row) {
     return started
       ? {
           rule: 4,
-          action: PLAN_ACTION.CLEAR,
+          action: PLAN_ACTION.CLEAR_AND_CLOSE,
           why: "dropped from the quotation, work started",
         }
       : {
@@ -4373,6 +4374,7 @@ async function buildPlan(payload) {
         v.flag &&
         (r.action === PLAN_ACTION.DELETE ||
           r.action === PLAN_ACTION.CLEAR ||
+          r.action === PLAN_ACTION.CLEAR_AND_CLOSE ||
           r.action === PLAN_ACTION.CLOSE_BRANCH)
       ) {
         veto = `config flag ${v.flag}`;
@@ -4400,7 +4402,10 @@ async function buildPlan(payload) {
       let after = null;
       if (action === PLAN_ACTION.UPDATE)
         after = { total: v.newStd, TDL: v.newTDL, COO: v.newCOO, DE: v.newDE };
-      if (action === PLAN_ACTION.CLEAR)
+      if (
+        action === PLAN_ACTION.CLEAR ||
+        action === PLAN_ACTION.CLEAR_AND_CLOSE
+      )
         after = { total: null, TDL: null, COO: null, DE: null };
       // The group exists with no standard hours; these are the ones to write.
       if (action === PLAN_ACTION.REPLACE_EWRW)
@@ -4506,7 +4511,7 @@ resolver.define("applyPlan", async ({ payload }) => {
 //   - every attempt is returned in a receipt with before, after and status —
 //     the only record of what a write replaced
 
-const DRY_RUN = false;
+const DRY_RUN = true;
 
 const WRITE_FIELDS = [
   { k: "total", cf: "customfield_10061" },
@@ -4671,6 +4676,7 @@ export async function applyWritesConsumer(event, context) {
       if (
         row.action !== "update 4 fields" &&
         row.action !== "clear 4 fields" &&
+        row.action !== "clear hours and close" &&
         row.action !== "delete extra work, add standard"
       )
         continue;
@@ -4815,7 +4821,11 @@ export async function applyWritesConsumer(event, context) {
   // still exist in Jira, so the stored loops still match what is there.
   const closures = [];
   for (const row of phaseRows) {
-    if (row.action !== "close the branch") continue;
+    if (
+      row.action !== "close the branch" &&
+      row.action !== "clear hours and close"
+    )
+      continue;
     closures.push(await closeBranch(row.key));
   }
   console.log(`[write] closures done at ${ms()}`);
@@ -5172,7 +5182,8 @@ async function patchPhaseSnapshot(
   const addedActivities = [];
   for (const row of rows) {
     const isUpdate = row.action === "update 4 fields";
-    const isClear = row.action === "clear 4 fields";
+    const isClear =
+      row.action === "clear 4 fields" || row.action === "clear hours and close";
     const isSame =
       row.action === "no action" && !row.veto && row.verdict === "SAME";
     // A group cleared before Step 5 existed reads NOT PLANNED now, not REMOVE,
