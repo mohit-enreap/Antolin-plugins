@@ -4563,6 +4563,7 @@ export async function applyWritesConsumer(event, context) {
   if (!plan.ok) return plan;
 
   const receipt = [];
+  const closures = [];
   const phaseDelta = {};
   let written = 0,
     skipped = 0,
@@ -4672,6 +4673,23 @@ export async function applyWritesConsumer(event, context) {
     phaseLabel = ph.phase;
     phaseRows = ph.rows;
     phaseCooked = ph.cooked || null;
+
+    // Ruling 1.2 and rule 4 — close BEFORE the hour fields are touched.
+    // Clearing 10061 first and then failing to close leaves a group with no
+    // hours and an open status, which the next compare reads as NOT PLANNED
+    // (rule 7, no action) because the hours were the only thing marking it as
+    // de-scoped. Nothing would ever close it. Failing the close first changes
+    // nothing at all, so the verdict still reads REMOVE and a re-click retries.
+    for (const row of ph.rows) {
+      if (
+        row.action !== "close the branch" &&
+        row.action !== "clear hours and close"
+      )
+        continue;
+      closures.push(await closeBranch(row.key));
+    }
+    console.log(`[write] closures done at ${ms()}`);
+
     for (const row of ph.rows) {
       if (
         row.action !== "update 4 fields" &&
@@ -4813,22 +4831,6 @@ export async function applyWritesConsumer(event, context) {
       replacedSummaries.add(row.summary);
   }
   console.log(`[write] extra work replacements done at ${ms()}`);
-
-  // Ruling 1.2 — the extra work is gone from the quotation but somebody has
-  // started it, so the branch is closed rather than deleted and the group is
-  // left where it is. After the replacements, so both destructive passes are
-  // finished. Nothing is written to the snapshot for this case: the branches
-  // still exist in Jira, so the stored loops still match what is there.
-  const closures = [];
-  for (const row of phaseRows) {
-    if (
-      row.action !== "close the branch" &&
-      row.action !== "clear hours and close"
-    )
-      continue;
-    closures.push(await closeBranch(row.key));
-  }
-  console.log(`[write] closures done at ${ms()}`);
 
   // Step 5 runs BEFORE the rollups now. create-activity line 539 sets the phase
   // total from the snapshot: customfield_10061 = Number(totalHours.toFixed(1)).
