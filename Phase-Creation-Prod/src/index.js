@@ -3745,6 +3745,39 @@ async function classifyNullGroup(agKey) {
   return { ewrw, std, isEwRw: ewrw > 0 && std === 0, total: acts.length };
 }
 
+// The status each group will END UP in. Compare becomes the only screen once
+// Plan comes out at go-live, so it has to say what will happen, not just what
+// changed. Derived from resolvePlanRule so the rules live in one place.
+function nextStatusFor(action, status) {
+  if (action === PLAN_ACTION.DELETE) return "Removed";
+  if (
+    action === PLAN_ACTION.CLOSE_BRANCH ||
+    action === PLAN_ACTION.CLEAR_AND_CLOSE
+  )
+    return "Closed";
+  // Ruling 3 reopens a closed group. Ruling 2's is already In Progress and
+  // transitionTo returns ALREADY, so its status does not move.
+  if (action === PLAN_ACTION.CLOSE_EWRW_ADD)
+    return status === "Closed" ? "In Progress" : status;
+  return status;
+}
+
+// buildPlan re-reads the hours live before it deletes anything — that is the
+// safety gate and it stays there. This is the same test done from data Compare
+// already has, so the preview does not promise a delete that will be vetoed.
+function previewVeto(flag, action, actual) {
+  if (
+    flag &&
+    (action === PLAN_ACTION.DELETE ||
+      action === PLAN_ACTION.CLEAR ||
+      action === PLAN_ACTION.CLEAR_AND_CLOSE ||
+      action === PLAN_ACTION.CLOSE_BRANCH)
+  )
+    return true;
+  if (action === PLAN_ACTION.DELETE && (actual ?? 0) > 0) return true;
+  return false;
+}
+
 // The comparison body, extracted so Stage 2 can call the SAME code the UI calls.
 // A copy would drift the moment one side changed; one implementation cannot.
 async function runComparison(payload) {
@@ -3859,7 +3892,7 @@ async function runComparison(payload) {
       const res = await api
         .asApp()
         .requestJira(
-          route`/rest/api/3/issue/${ag.key}?fields=summary,status,customfield_10061,customfield_10075,customfield_10076,customfield_10077`,
+          route`/rest/api/3/issue/${ag.key}?fields=summary,status,customfield_10061,customfield_10065,customfield_10075,customfield_10076,customfield_10077`,
         );
       const f = (await res.json()).fields;
       // Only for groups with no standard hours — one extra fetch each, and
@@ -3874,6 +3907,7 @@ async function runComparison(payload) {
         status: f.status?.name || null,
         ewrw: ewrwInfo,
         currentStd: f.customfield_10061 ?? null,
+        currentActual: f.customfield_10065 ?? null,
         currentCOO: f.customfield_10075 ?? null,
         currentDE: f.customfield_10076 ?? null,
         currentTDL: f.customfield_10077 ?? null,
@@ -3983,8 +4017,17 @@ async function runComparison(payload) {
           flag = "MISSING_DM_CONFIG";
         }
       }
+      const planRule = resolvePlanRule({ verdict, status: ag.status });
+      const previewVetoed = previewVeto(
+        flag,
+        planRule.action,
+        ag.currentActual,
+      );
       verdicts.push({
         ...ag,
+        nextStatus: previewVetoed
+          ? ag.status
+          : nextStatusFor(planRule.action, ag.status),
         currentStd: cur,
         newStd: nw,
         currentTDL: curTDL,

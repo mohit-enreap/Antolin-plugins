@@ -297,14 +297,17 @@ function DetailRows({ row }) {
             <td
               style={{
                 ...DETAIL_NUM,
+                textAlign: "center",
                 color: isNum(cur) ? T.body : T.faint,
               }}
             >
               {isNum(cur) ? hrs(cur) : "—"}
             </td>
+            <td style={DETAIL} />
             <td
               style={{
                 ...DETAIL_NUM,
+                textAlign: "center",
                 color: T.ink,
                 fontWeight: changed ? 700 : 400,
               }}
@@ -371,10 +374,40 @@ function Table({ verdicts }) {
           <tr>
             <th style={{ ...TH, width: 92, borderTopLeftRadius: 6 }}>Group</th>
             <th style={TH}>Activity</th>
-            <th style={{ ...TH, width: 108 }}>Status</th>
-            <th style={{ ...TH, width: 92, textAlign: "right" }}>Current</th>
-            <th style={{ ...TH, width: 92, textAlign: "right" }}>New</th>
-            <th style={{ ...TH, width: 132, borderTopRightRadius: 6 }}>
+            <th style={{ ...TH, width: 110, textAlign: "center" }}>
+              Current status
+            </th>
+            <th
+              style={{
+                ...TH,
+                width: 110,
+                textAlign: "center",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Current hours
+            </th>
+            <th style={{ ...TH, width: 110, textAlign: "center" }}>
+              New status
+            </th>
+            <th
+              style={{
+                ...TH,
+                width: 110,
+                textAlign: "center",
+                whiteSpace: "nowrap",
+              }}
+            >
+              New hours
+            </th>
+            <th
+              style={{
+                ...TH,
+                width: 110,
+                textAlign: "center",
+                borderTopRightRadius: 6,
+              }}
+            >
               Verdict
             </th>
           </tr>
@@ -385,7 +418,7 @@ function Table({ verdicts }) {
               {b.section ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     style={{
                       padding: "7px 12px",
                       fontSize: 11,
@@ -451,6 +484,7 @@ function Table({ verdicts }) {
                           color: closed ? T.ink : T.muted,
                           fontWeight: closed ? 600 : 400,
                           whiteSpace: "nowrap",
+                          textAlign: "center",
                         }}
                       >
                         {v.status || "—"}
@@ -458,15 +492,38 @@ function Table({ verdicts }) {
                       <td
                         style={{
                           ...NUM,
+                          textAlign: "center",
                           color: cur === null ? T.faint : T.body,
                         }}
                       >
                         {cur === null ? "—" : cur}
                       </td>
-                      <td style={{ ...NUM, fontWeight: 600 }}>
+                      <td
+                        style={{
+                          ...TD,
+                          fontSize: 12,
+                          whiteSpace: "nowrap",
+                          color: v.nextStatus === v.status ? T.faint : T.ink,
+                          fontWeight: v.nextStatus === v.status ? 400 : 600,
+                          textAlign: "center",
+                        }}
+                      >
+                        {v.nextStatus === v.status
+                          ? "unchanged"
+                          : v.nextStatus || "—"}
+                      </td>
+                      <td
+                        style={{ ...NUM, fontWeight: 600, textAlign: "center" }}
+                      >
                         {nw === null ? "—" : nw}
                       </td>
-                      <td style={{ ...TD, whiteSpace: "nowrap" }}>
+                      <td
+                        style={{
+                          ...TD,
+                          whiteSpace: "nowrap",
+                          textAlign: "center",
+                        }}
+                      >
                         <Lozenge
                           verdict={v.verdict}
                           flagged={Boolean(v.flag)}
