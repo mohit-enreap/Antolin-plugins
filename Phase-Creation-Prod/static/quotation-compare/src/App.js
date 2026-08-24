@@ -565,6 +565,11 @@ const ACTION_STYLE = {
     bg: "#F3F0FF",
   },
   "close the branch": { label: "Close", fg: "#974F0C", bg: "#FFF7D6" },
+  "close extra work, add standard": {
+    label: "Close EW + add",
+    fg: "#5E4DB2",
+    bg: "#F3F0FF",
+  },
   "clear hours and close": {
     label: "Clear + close",
     fg: "#974F0C",
@@ -582,10 +587,16 @@ function ActionLozenge({ row }) {
   const s = row.veto
     ? VETO_STYLE
     : ACTION_STYLE[row.action] || ACTION_STYLE["no action"];
+  // Ruling 3 — nothing closes for a group that is already Closed. Its extra
+  // work is already closed and stays that way; the only move is the reopen.
+  const label =
+    row.action === "close extra work, add standard" && row.status === "Closed"
+      ? "Reopen + add"
+      : s.label;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
       <span title={row.why} style={{ ...LOZ, color: s.fg, background: s.bg }}>
-        {s.label}
+        {label}
       </span>
       {row.veto ? <span title={row.veto}>⚠️</span> : null}
       {row.rule ? (
@@ -665,6 +676,12 @@ function PlanDetailRows({ row }) {
   if (row.action === "clear hours and close")
     notes.push(
       "The four hour fields are emptied and the whole branch is closed. Logged hours are kept and nothing is deleted.",
+    );
+  if (row.action === "close extra work, add standard")
+    notes.push(
+      row.status === "Closed"
+        ? "The extra work and rework activities stay closed. The group is reopened to In Progress and the standard activity is created in it by Create Phase."
+        : "The extra work and rework activities are closed, keeping their logged hours. The group stays open and the standard activity is created in it by Create Phase.",
     );
 
   const accent = { boxShadow: `inset 3px 0 0 ${T.line}` };

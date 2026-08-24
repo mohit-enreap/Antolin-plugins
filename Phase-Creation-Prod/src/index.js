@@ -3940,7 +3940,12 @@ async function runComparison(payload) {
         !hasRoles || (nwTDL === curTDL && nwDE === curDE && nwCOO === curCOO);
 
       let verdict;
-      if (isClosed) {
+      // Ruling 3 — a CLOSED extra work group whose activity is back in the
+      // quotation. Checked before the closed test, which would otherwise lock
+      // it and skip it forever.
+      if (isClosed && cur === null && ag.ewrw?.isEwRw && nw > 0) {
+        verdict = "ADD STANDARD (extra work group)";
+      } else if (isClosed) {
         verdict = "LOCKED (closed — skip)";
       } else if (cur === null && ag.ewrw?.isEwRw) {
         // Swapnil: treat these like a standard group. The quotation decides
@@ -4261,6 +4266,7 @@ const PLAN_ACTION = {
   REPLACE_EWRW: "delete extra work, add standard",
   CLOSE_BRANCH: "close the branch",
   CLEAR_AND_CLOSE: "clear hours and close",
+  CLOSE_EWRW_ADD: "close extra work, add standard",
   NONE: "no action",
 };
 
@@ -4272,6 +4278,21 @@ function resolvePlanRule(row) {
   const status = row.status || "";
   const started = status === "In Progress" || status === "Submit for Approval";
 
+  // Rulings 1, 2 and 3 — an extra work group the quotation has brought back
+  // into standard scope. Handled BEFORE the closed test, because ruling 3
+  // covers a group that is already Closed.
+  if (v.startsWith("ADD STANDARD"))
+    return status === "Not Started"
+      ? {
+          rule: 2,
+          action: PLAN_ACTION.REPLACE_EWRW,
+          why: "standard added, extra work not started",
+        }
+      : {
+          rule: 2,
+          action: PLAN_ACTION.CLOSE_EWRW_ADD,
+          why: "standard added, extra work already worked on",
+        };
   if (status === "Closed")
     return { rule: 1, action: PLAN_ACTION.SKIP, why: "group is closed" };
   // Extra work groups. Closing a branch and reopening a group are transitions,
@@ -4288,18 +4309,7 @@ function resolvePlanRule(row) {
           action: PLAN_ACTION.DELETE,
           why: "extra work dropped from the quotation, not started",
         };
-  if (v.startsWith("ADD STANDARD"))
-    return started
-      ? {
-          rule: 2,
-          action: PLAN_ACTION.NONE,
-          why: "standard added to an extra work group in progress — needs the transition step",
-        }
-      : {
-          rule: 2,
-          action: PLAN_ACTION.REPLACE_EWRW,
-          why: "standard added, extra work not started",
-        };
+
   if (v.startsWith("NOT PLANNED"))
     return { rule: 7, action: PLAN_ACTION.NONE, why: "no baseline hours" };
   if (v.startsWith("ORPHAN"))
@@ -4408,7 +4418,10 @@ async function buildPlan(payload) {
       )
         after = { total: null, TDL: null, COO: null, DE: null };
       // The group exists with no standard hours; these are the ones to write.
-      if (action === PLAN_ACTION.REPLACE_EWRW)
+      if (
+        action === PLAN_ACTION.REPLACE_EWRW ||
+        action === PLAN_ACTION.CLOSE_EWRW_ADD
+      )
         after = { total: v.newStd, TDL: v.newTDL, COO: v.newCOO, DE: v.newDE };
 
       counts[action] = (counts[action] || 0) + 1;
@@ -4564,6 +4577,8 @@ export async function applyWritesConsumer(event, context) {
 
   const receipt = [];
   const closures = [];
+  const ewrwCloses = [];
+  const closedEwRwSummaries = new Set();
   const phaseDelta = {};
   let written = 0,
     skipped = 0,
@@ -4690,12 +4705,33 @@ export async function applyWritesConsumer(event, context) {
     }
     console.log(`[write] closures done at ${ms()}`);
 
+    // Rulings 2 and 3 — the extra work has been worked on, so it is closed
+    // rather than deleted and the standard activity is added beside it. Also
+    // before the writes: the hours are the only thing marking this group as an
+    // extra work group, so writing them after a failed close would make the
+    // next compare read SAME and never retry.
+    for (const row of ph.rows) {
+      if (row.action !== "close extra work, add standard") continue;
+      const r = await closeEwRwChildren(row);
+      ewrwCloses.push(r);
+      if (["CLOSED_EWRW", "DRY_RUN", "NOTHING_TO_CLOSE"].includes(r.status))
+        closedEwRwSummaries.add(row.summary);
+    }
+    console.log(`[write] extra work closes done at ${ms()}`);
+
     for (const row of ph.rows) {
       if (
         row.action !== "update 4 fields" &&
         row.action !== "clear 4 fields" &&
         row.action !== "clear hours and close" &&
+        row.action !== "close extra work, add standard" &&
         row.action !== "delete extra work, add standard"
+      )
+        continue;
+      // Only write the hours once the extra work actually closed.
+      if (
+        row.action === "close extra work, add standard" &&
+        !closedEwRwSummaries.has(row.summary)
       )
         continue;
 
@@ -4848,6 +4884,7 @@ export async function applyWritesConsumer(event, context) {
           phaseRows,
           deletedSummaries,
           replacedSummaries,
+          closedEwRwSummaries,
         )
       : { ok: false, error: "NO_COOK" };
   } catch (e) {
@@ -4940,6 +4977,7 @@ export async function applyWritesConsumer(event, context) {
     deletions,
     replacements,
     closures,
+    ewrwCloses,
     snapshot,
     queuedCreate,
   };
@@ -5162,6 +5200,7 @@ async function patchPhaseSnapshot(
   rows,
   deletedSummaries,
   replacedSummaries,
+  closedEwRwSummaries,
 ) {
   const snapKey = `${projectKey}_${phaseName}`;
   const derKey = `${projectKey}_Industrialization_${phaseName}`;
@@ -5206,6 +5245,14 @@ async function patchPhaseSnapshot(
       row.action === "delete extra work, add standard" &&
       replacedSummaries &&
       replacedSummaries.has(row.summary);
+    // Rulings 2 and 3 — same as a replace, but the extra work branches survive
+    // in Jira (closed), so their loops stay as they are. Zeroing them would make
+    // the Create Phase form show 0 extra work loops beside an extra work
+    // activity that is still there.
+    const isCloseAdd =
+      row.action === "close extra work, add standard" &&
+      closedEwRwSummaries &&
+      closedEwRwSummaries.has(row.summary);
     // Step 6 deleted this group, so untick it — same shape as rule 4. Only when
     // the delete actually succeeded; a skipped or failed one is left alone, or
     // storage would claim the group is gone while it is still in Jira.
@@ -5221,7 +5268,8 @@ async function patchPhaseSnapshot(
       !isStale &&
       !isAdd &&
       !isDeleted &&
-      !isReplace
+      !isReplace &&
+      !isCloseAdd
     )
       continue;
     const n = snapNorm(row.summary);
@@ -5252,7 +5300,7 @@ async function patchPhaseSnapshot(
         a.extraWorkLoop = 0;
         a.reWorkLoop = 0;
       }
-    } else if (isAdd || isReplace) {
+    } else if (isAdd || isReplace || isCloseAdd) {
       const c = cookedByNorm[n];
       if (!c) continue;
       // One standard loop — that is what "in the new quotation" means. The user
@@ -5585,6 +5633,53 @@ async function replaceEwRw(row) {
     }
   }
   out.status = out.deleted.every((d) => d.ok) ? "REPLACED" : "PARTIAL";
+  return out;
+}
+
+// Rulings 2 and 3 — the quotation has brought this activity back into standard
+// scope, but the extra work has been worked on, so it is closed rather than
+// deleted and every logged hour is kept.
+//
+// The GROUP is not closed. Ruling 2 leaves it In Progress; ruling 3 reopens it
+// from Closed so the new standard activity has an open parent. transitionTo
+// returns ALREADY for the first case, so one path serves both.
+async function closeEwRwChildren(row) {
+  const out = { key: row.key, summary: row.summary, rule: row.rule, moves: [] };
+  const res = await api
+    .asApp()
+    .requestJira(route`/rest/api/3/issue/${row.key}?fields=status,issuetype`);
+  const f = (await res.json()).fields || {};
+  if (f.issuetype?.id !== "10019") {
+    out.status = "SKIPPED_NOT_A_GROUP";
+    console.warn(`[ewrw] SKIP ${row.key} — not an Activity Group`);
+    return out;
+  }
+
+  // Only the extra work and rework branch, deepest first. No worklog guard —
+  // nothing is deleted here, so nothing can be lost.
+  const kids = (await collectDescendants(row.key))
+    .filter((k) => EWRW_SUFFIX.test(k.summary))
+    .sort((a, b) => b.depth - a.depth);
+  if (!kids.length) {
+    out.status = "NOTHING_TO_CLOSE";
+    return out;
+  }
+  const ok = (m) => ["MOVED", "DRY_RUN", "ALREADY"].includes(m.status);
+  for (const k of kids) {
+    const m = await transitionTo(k.key, "Closed");
+    out.moves.push(m);
+    if (!ok(m)) {
+      console.warn(`[ewrw] cascade stopped at ${k.key} (${m.status})`);
+      out.status = "PARTIAL";
+      return out;
+    }
+  }
+  // Reopening a Closed group clears its 10971 and DFS% — areAllDescendantsClosed
+  // turns false. The logged hours and the closed history are untouched; the
+  // derived fields recompute when it closes again.
+  const g = await transitionTo(row.key, "In Progress");
+  out.moves.push(g);
+  out.status = ok(g) ? "CLOSED_EWRW" : "PARTIAL";
   return out;
 }
 
