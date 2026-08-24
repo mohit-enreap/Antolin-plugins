@@ -4319,7 +4319,7 @@ const PLAN_ACTION = {
 function resolvePlanRule(row) {
   const v = String(row.verdict || "");
   const status = row.status || "";
-  const started = status === "In Progress" || status === "Submit for Approval";
+  const started = status === "In Progress" || status === "Submit For Approval";
 
   // Rulings 1, 2 and 3 — an extra work group the quotation has brought back
   // into standard scope. Handled BEFORE the closed test, because ruling 3
