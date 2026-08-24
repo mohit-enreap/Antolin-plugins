@@ -633,6 +633,11 @@ const ACTION_STYLE = {
     bg: "#FFF7D6",
   },
   "no action": { label: "None", fg: "#8993A4", bg: "#F1F2F4" },
+  "reopen and update": {
+    label: "Reopen + update",
+    fg: "#0055CC",
+    bg: "#E9F2FF",
+  },
 };
 
 /* A vetoed row also carries action "no action", but for a very different
@@ -739,6 +744,10 @@ function PlanDetailRows({ row }) {
       row.status === "Closed"
         ? "The extra work and rework activities stay closed. The group is reopened to In Progress and the standard activity is created in it by Create Phase."
         : "The extra work and rework activities are closed, keeping their logged hours. The group stays open and the standard activity is created in it by Create Phase.",
+    );
+  if (row.action === "reopen and update")
+    notes.push(
+      "The four hour fields are updated and the group is reopened to In Progress. Its activities stay closed, and any new activity is created by hand.",
     );
 
   const accent = { boxShadow: `inset 3px 0 0 ${T.line}` };

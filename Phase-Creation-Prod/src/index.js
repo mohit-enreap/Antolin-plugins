@@ -3759,6 +3759,7 @@ function nextStatusFor(action, status) {
   // transitionTo returns ALREADY, so its status does not move.
   if (action === PLAN_ACTION.CLOSE_EWRW_ADD)
     return status === "Closed" ? "In Progress" : status;
+  if (action === PLAN_ACTION.UPDATE_AND_REOPEN) return "In Progress";
   return status;
 }
 
@@ -3979,8 +3980,6 @@ async function runComparison(payload) {
       // it and skip it forever.
       if (isClosed && cur === null && ag.ewrw?.isEwRw && nw > 0) {
         verdict = "ADD STANDARD (extra work group)";
-      } else if (isClosed) {
-        verdict = "LOCKED (closed — skip)";
       } else if (cur === null && ag.ewrw?.isEwRw) {
         // Swapnil: treat these like a standard group. The quotation decides
         // whether the activity exists at all; the extra work loops go with it.
@@ -4002,7 +4001,7 @@ async function runComparison(payload) {
       const isDrawingRow = ag.summary.includes("2D DELIVERABLES");
       const isDataMgmtRow = ag.summary.includes("DATA MANAGEMENT");
       let flag = null;
-      if (nw === 0 && !isClosed) {
+      if (nw === 0) {
         if (
           isDrawingRow &&
           cookDiag &&
@@ -4310,6 +4309,7 @@ const PLAN_ACTION = {
   CLOSE_BRANCH: "close the branch",
   CLEAR_AND_CLOSE: "clear hours and close",
   CLOSE_EWRW_ADD: "close extra work, add standard",
+  UPDATE_AND_REOPEN: "reopen and update",
   NONE: "no action",
 };
 
@@ -4336,8 +4336,26 @@ function resolvePlanRule(row) {
           action: PLAN_ACTION.CLOSE_EWRW_ADD,
           why: "standard added, extra work already worked on",
         };
-  if (status === "Closed")
+  // Rulings 2.1.1 and 2.1.2 — the quotation has revised a group that is already
+  // closed. The hours are corrected either way. 2.1.1 also reopens the group so
+  // the correction is visible and someone can act on it; its activities stay
+  // closed and any new one is created by hand. 2.1.2 leaves it closed, and
+  // 10971 falls to 0 on its own once 10061 is null.
+  if (status === "Closed") {
+    if (v === "CHANGE")
+      return {
+        rule: "2.1.1",
+        action: PLAN_ACTION.UPDATE_AND_REOPEN,
+        why: "hours changed after the group was closed",
+      };
+    if (v.startsWith("REMOVE"))
+      return {
+        rule: "2.1.2",
+        action: PLAN_ACTION.CLEAR,
+        why: "dropped from the quotation after the group was closed",
+      };
     return { rule: 1, action: PLAN_ACTION.SKIP, why: "group is closed" };
+  }
   // Extra work groups. Closing a branch and reopening a group are transitions,
   // which is its own step — those cases plan as no action for now and say so.
   if (v.startsWith("REMOVE (extra work"))
@@ -4453,7 +4471,10 @@ async function buildPlan(payload) {
         DE: v.currentDE ?? null,
       };
       let after = null;
-      if (action === PLAN_ACTION.UPDATE)
+      if (
+        action === PLAN_ACTION.UPDATE ||
+        action === PLAN_ACTION.UPDATE_AND_REOPEN
+      )
         after = { total: v.newStd, TDL: v.newTDL, COO: v.newCOO, DE: v.newDE };
       if (
         action === PLAN_ACTION.CLEAR ||
@@ -4622,6 +4643,8 @@ export async function applyWritesConsumer(event, context) {
   const closures = [];
   const ewrwCloses = [];
   const closedEwRwSummaries = new Set();
+  const reopens = [];
+  const reopenedSummaries = new Set();
   const phaseDelta = {};
   let written = 0,
     skipped = 0,
@@ -4762,12 +4785,26 @@ export async function applyWritesConsumer(event, context) {
     }
     console.log(`[write] extra work closes done at ${ms()}`);
 
+    // Ruling 2.1.1 — reopen before writing. Reopening and then failing to write
+    // leaves a CHANGE the next run retries. Writing and then failing to reopen
+    // leaves the hours matching the quotation, so the next compare reads SAME
+    // and the group never reopens.
+    for (const row of ph.rows) {
+      if (row.action !== "reopen and update") continue;
+      const m = await transitionTo(row.key, "In Progress");
+      reopens.push(m);
+      if (["MOVED", "DRY_RUN", "ALREADY"].includes(m.status))
+        reopenedSummaries.add(row.summary);
+    }
+    console.log(`[write] reopens done at ${ms()}`);
+
     for (const row of ph.rows) {
       if (
         row.action !== "update 4 fields" &&
         row.action !== "clear 4 fields" &&
         row.action !== "clear hours and close" &&
         row.action !== "close extra work, add standard" &&
+        row.action !== "reopen and update" &&
         row.action !== "delete extra work, add standard"
       )
         continue;
@@ -4775,6 +4812,12 @@ export async function applyWritesConsumer(event, context) {
       if (
         row.action === "close extra work, add standard" &&
         !closedEwRwSummaries.has(row.summary)
+      )
+        continue;
+      // Only write the new hours once the group actually reopened.
+      if (
+        row.action === "reopen and update" &&
+        !reopenedSummaries.has(row.summary)
       )
         continue;
 
@@ -4928,6 +4971,7 @@ export async function applyWritesConsumer(event, context) {
           deletedSummaries,
           replacedSummaries,
           closedEwRwSummaries,
+          reopenedSummaries,
         )
       : { ok: false, error: "NO_COOK" };
   } catch (e) {
@@ -5021,6 +5065,7 @@ export async function applyWritesConsumer(event, context) {
     replacements,
     closures,
     ewrwCloses,
+    reopens,
     snapshot,
     queuedCreate,
   };
@@ -5244,6 +5289,7 @@ async function patchPhaseSnapshot(
   deletedSummaries,
   replacedSummaries,
   closedEwRwSummaries,
+  reopenedSummaries,
 ) {
   const snapKey = `${projectKey}_${phaseName}`;
   const derKey = `${projectKey}_Industrialization_${phaseName}`;
@@ -5265,7 +5311,11 @@ async function patchPhaseSnapshot(
   const touched = [];
   const addedActivities = [];
   for (const row of rows) {
-    const isUpdate = row.action === "update 4 fields";
+    const isUpdate =
+      row.action === "update 4 fields" ||
+      (row.action === "reopen and update" &&
+        reopenedSummaries &&
+        reopenedSummaries.has(row.summary));
     const isClear =
       row.action === "clear 4 fields" || row.action === "clear hours and close";
     const isSame =
