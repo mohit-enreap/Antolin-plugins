@@ -264,8 +264,6 @@ function DetailRows({ row }) {
     nwSum !== null && nwStd !== null && Math.abs(nwSum - nwStd) > 0.25;
 
   const notes = [];
-  if (row.status === "Closed")
-    notes.push("This group is closed, so an overwrite will skip it.");
   if (classify(row.verdict) === "ORPHAN")
     notes.push("No matching activity was found in the new quotation.");
   if (row.flag === "MISSING_2D_CONFIG")

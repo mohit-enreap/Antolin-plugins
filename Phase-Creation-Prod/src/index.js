@@ -4354,7 +4354,11 @@ function resolvePlanRule(row) {
         action: PLAN_ACTION.CLEAR,
         why: "dropped from the quotation after the group was closed",
       };
-    return { rule: 1, action: PLAN_ACTION.SKIP, why: "group is closed" };
+    return {
+      rule: 1,
+      action: PLAN_ACTION.SKIP,
+      why: "group is closed and the quotation has not changed it",
+    };
   }
   // Extra work groups. Closing a branch and reopening a group are transitions,
   // which is its own step — those cases plan as no action for now and say so.
