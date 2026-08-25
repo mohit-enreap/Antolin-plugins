@@ -304,6 +304,7 @@ function DetailRows({ row }) {
               {isNum(cur) ? hrs(cur) : "—"}
             </td>
             <td style={DETAIL} />
+            <td style={DETAIL} />
             <td
               style={{
                 ...DETAIL_NUM,
@@ -314,9 +315,10 @@ function DetailRows({ row }) {
             >
               {isNum(nw) ? hrs(nw) : "—"}
             </td>
-            <td style={DETAIL}>
+            <td style={{ ...DETAIL, textAlign: "center" }}>
               <Delta cur={cur} nw={nw} />
             </td>
+            {SHOW_VERDICT ? <td style={DETAIL} /> : null}
           </tr>
         );
       })}
@@ -325,7 +327,7 @@ function DetailRows({ row }) {
         <tr>
           <td style={{ ...DETAIL, ...accent }} />
           <td
-            colSpan={5}
+            colSpan={COMPARE_COLS - 1}
             style={{
               ...DETAIL,
               paddingTop: 2,
@@ -374,42 +376,64 @@ function Table({ verdicts }) {
           <tr>
             <th style={{ ...TH, width: 92, borderTopLeftRadius: 6 }}>Group</th>
             <th style={TH}>Activity</th>
-            <th style={{ ...TH, width: 110, textAlign: "center" }}>
+            <th style={{ ...TH, width: 106, textAlign: "center" }}>
               Current status
             </th>
             <th
               style={{
                 ...TH,
-                width: 110,
+                width: 106,
                 textAlign: "center",
                 whiteSpace: "nowrap",
               }}
             >
-              Current hours
+              Current Std Hrs
             </th>
-            <th style={{ ...TH, width: 110, textAlign: "center" }}>
+            <th
+              style={{
+                ...TH,
+                width: 100,
+                textAlign: "center",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Actual Hrs
+            </th>
+            <th style={{ ...TH, width: 106, textAlign: "center" }}>
               New status
             </th>
             <th
               style={{
                 ...TH,
-                width: 110,
+                width: 106,
                 textAlign: "center",
                 whiteSpace: "nowrap",
               }}
             >
-              New hours
+              New Std Hrs
             </th>
             <th
               style={{
                 ...TH,
-                width: 110,
+                width: 90,
                 textAlign: "center",
-                borderTopRightRadius: 6,
+                ...(SHOW_VERDICT ? {} : { borderTopRightRadius: 6 }),
               }}
             >
-              Verdict
+              Change
             </th>
+            {SHOW_VERDICT ? (
+              <th
+                style={{
+                  ...TH,
+                  width: 110,
+                  textAlign: "center",
+                  borderTopRightRadius: 6,
+                }}
+              >
+                Verdict
+              </th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -418,7 +442,7 @@ function Table({ verdicts }) {
               {b.section ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={COMPARE_COLS}
                     style={{
                       padding: "7px 12px",
                       fontSize: 11,
@@ -476,7 +500,21 @@ function Table({ verdicts }) {
                         )}
                         {p.group.replace(/^Group\s*/i, "")}
                       </td>
-                      <td style={TD}>{p.name}</td>
+                      <td style={TD}>
+                        {p.name}
+                        {!SHOW_VERDICT && v.flag ? (
+                          <span
+                            title={v.flag}
+                            style={{
+                              marginLeft: 6,
+                              color: T.red,
+                              fontWeight: 700,
+                            }}
+                          >
+                            !
+                          </span>
+                        ) : null}
+                      </td>
                       <td
                         style={{
                           ...TD,
@@ -500,6 +538,15 @@ function Table({ verdicts }) {
                       </td>
                       <td
                         style={{
+                          ...NUM,
+                          textAlign: "center",
+                          color: isNum(v.currentActual) ? T.body : T.faint,
+                        }}
+                      >
+                        {isNum(v.currentActual) ? hrs(v.currentActual) : "—"}
+                      </td>
+                      <td
+                        style={{
                           ...TD,
                           fontSize: 12,
                           whiteSpace: "nowrap",
@@ -509,7 +556,7 @@ function Table({ verdicts }) {
                         }}
                       >
                         {v.nextStatus === v.status
-                          ? "unchanged"
+                          ? "Unchanged"
                           : v.nextStatus || "—"}
                       </td>
                       <td
@@ -517,18 +564,23 @@ function Table({ verdicts }) {
                       >
                         {nw === null ? "—" : nw}
                       </td>
-                      <td
-                        style={{
-                          ...TD,
-                          whiteSpace: "nowrap",
-                          textAlign: "center",
-                        }}
-                      >
-                        <Lozenge
-                          verdict={v.verdict}
-                          flagged={Boolean(v.flag)}
-                        />
+                      <td style={{ ...TD, textAlign: "center" }}>
+                        <Delta cur={cur} nw={nw} />
                       </td>
+                      {SHOW_VERDICT ? (
+                        <td
+                          style={{
+                            ...TD,
+                            whiteSpace: "nowrap",
+                            textAlign: "center",
+                          }}
+                        >
+                          <Lozenge
+                            verdict={v.verdict}
+                            flagged={Boolean(v.flag)}
+                          />
+                        </td>
+                      ) : null}
                     </tr>
                     {isOpen && expandable ? <DetailRows row={v} /> : null}
                   </React.Fragment>
@@ -592,6 +644,12 @@ function Added({ added }) {
  * STEP 2 — the apply plan view. Renders what applyPlan returned.      *
  * Read-only: this component writes nothing and calls nothing.         *
  * ------------------------------------------------------------------ */
+
+// Swapnil asked for the verdict column to come out of Compare. Kept behind a
+// flag rather than deleted — the Lozenge, classify() and the summary chips all
+// still use the verdict, and turning this back on restores the column.
+const SHOW_VERDICT = false;
+const COMPARE_COLS = SHOW_VERDICT ? 9 : 8;
 
 const LOZ = {
   display: "inline-block",
