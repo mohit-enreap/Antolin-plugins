@@ -1092,12 +1092,29 @@ function App() {
   const [mode, setMode] = useState(null); // "compare" | "plan"
   const [error, setError] = useState(null);
   const [tab, setTab] = useState(0);
+  // Step 2: the real version list. Empty when no quotation is linked, in which
+  // case the compare runs against the static Phase Configuration catalog.
+  const [versionInfo, setVersionInfo] = useState(null);
+  const [targetVersion, setTargetVersion] = useState("");
 
   useEffect(() => {
     (async () => {
       try {
         const ctx = await view.getContext();
         setIssue(ctx.extension.issue);
+        const vi = await invoke("listQuotationVersions", {
+          issue: ctx.extension.issue,
+        });
+        console.log("[ver]", vi);
+        setVersionInfo(vi);
+        if (vi?.linked && vi.versions?.length) {
+          // Default to the newest version that is not the one already built,
+          // since comparing a project against itself shows nothing.
+          const later = vi.versions.filter((v) => v !== vi.builtFrom);
+          setTargetVersion(
+            later[later.length - 1] || vi.versions[vi.versions.length - 1],
+          );
+        }
       } catch (e) {
         setError("Could not read the project context. Reload the page.");
       }
@@ -1297,10 +1314,23 @@ function App() {
               >
                 Compare against
               </label>
-              <select id="rev" className="cq-sel" defaultValue="latest">
-                <option value="latest">
-                  {data ? data.newProduct : "Latest revision"} (preview data)
-                </option>
+              <select
+                id="rev"
+                className="cq-sel"
+                value={targetVersion}
+                disabled={!versionInfo?.linked}
+                onChange={(e) => setTargetVersion(e.target.value)}
+              >
+                {versionInfo?.linked ? (
+                  versionInfo.versions.map((v) => (
+                    <option key={v} value={v}>
+                      {v}
+                      {v === versionInfo.builtFrom ? "  (built from this)" : ""}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">Phase Configuration</option>
+                )}
               </select>
             </div>
             <button className="cq-btn" onClick={run} disabled={busy || !issue}>

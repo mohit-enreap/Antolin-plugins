@@ -5572,6 +5572,136 @@ async function runComparison(payload) {
   };
 }
 
+// ─── QUOTATION VERSIONS (read-only) ──────────────────────────────────────────
+// The compare needs a list of versions to pick a target from, and there is no
+// way to enumerate them from storage: Forge has no storage.query, and the
+// Quot_WO_ keys are only ever built, never listed.
+//
+// saveQuotationData writes the version history to customfield_12257 on the
+// QUOTATION issue in the same block as it writes the Quot_WO_ key, so the two
+// cannot fall out of step. Sayan's own code already reads it back the same way.
+//
+// The project's customfield_12738 is "summary ## quotation ## version": part 1
+// names the quotation issue, part 2 the version this project was built from.
+resolver.define("listQuotationVersions", async ({ payload }) => {
+  const projectKey = payload?.issue?.key;
+  if (!projectKey) {
+    return { ok: false, error: "NO_ISSUE" };
+  }
+
+  const res = await api
+    .asApp()
+    .requestJira(
+      route`/rest/api/3/issue/${projectKey}?fields=customfield_12059,customfield_12738,customfield_10073,customfield_10838,customfield_10052`,
+    );
+  if (!res.ok) {
+    return { ok: false, error: "FETCH_FAILED", status: res.status };
+  }
+  const f = (await res.json()).fields || {};
+
+  // Same gate getConfigData uses. "No" means the project was built from the
+  // static Phase Configuration catalog, and that is what the compare uses too.
+  const linked = (f["customfield_12059"]?.value ?? "No") === "Yes";
+  const parts = String(f["customfield_12738"] || "").split(" ## ");
+  const quotationKey = parts[1] || null;
+  const builtFrom = parts[2] || null;
+
+  const productKey = f["customfield_10073"]?.value ?? null;
+  const family = productKey
+    ? productKey.includes("- CAE")
+      ? "CAE"
+      : productKey.includes("- PS")
+        ? "PS"
+        : "CAD"
+    : null;
+
+  if (!linked || !quotationKey) {
+    return {
+      ok: true,
+      linked: false,
+      versions: [],
+      quotationKey,
+      builtFrom,
+      productKey,
+      family,
+      reason: !linked ? "NO_QUOTATION_REFERENCE" : "NO_QUOTATION_KEY",
+    };
+  }
+
+  // 12257 lives on the QUOTATION issue, not the project. Reading it from the
+  // project key would silently return nothing.
+  const qres = await api
+    .asApp()
+    .requestJira(
+      route`/rest/api/3/issue/${quotationKey}?fields=customfield_12257,customfield_12060`,
+    );
+  if (!qres.ok) {
+    return {
+      ok: false,
+      error: "QUOTATION_FETCH_FAILED",
+      quotationKey,
+      status: qres.status,
+    };
+  }
+  const qf = (await qres.json()).fields || {};
+
+  let versions = [];
+  try {
+    versions = JSON.parse(qf["customfield_12257"]) || [];
+  } catch (e) {
+    versions = [];
+  }
+  // The field can lag by one when a version was just saved, so fold in the
+  // current one rather than trusting the list alone.
+  const current = qf["customfield_12060"] || null;
+  if (current && !versions.includes(current)) versions.push(current);
+  if (builtFrom && !versions.includes(builtFrom)) versions.push(builtFrom);
+
+  versions.sort(
+    (a, b) =>
+      parseInt(String(a).replace(/\D/g, ""), 10) -
+      parseInt(String(b).replace(/\D/g, ""), 10),
+  );
+
+  // Probe the storage keys getConfigData would look for. Same key construction,
+  // so a miss here is the miss Create Phase is having — and it says so in the
+  // browser console rather than needing forge logs.
+  const baseKey = family === "CAD" ? productKey : productKey.split(" -")[0];
+  const customerName = f["customfield_10838"]?.value ?? null;
+  const probes = [];
+  for (const v of versions) {
+    const k = `Quot_WO_${baseKey}_${customerName}_${quotationKey}_${family}_${v}`;
+    let found = false;
+    let size = 0;
+    try {
+      const blob = await storage.get(k);
+      found = Boolean(blob);
+      size = typeof blob === "string" ? blob.length : 0;
+    } catch (e) {
+      found = false;
+    }
+    probes.push({ version: v, key: k, found, size });
+    console.log(`[ver] ${found ? "FOUND  " : "MISSING"} ${k}`);
+  }
+
+  console.log(
+    `[ver] ${projectKey} -> ${quotationKey} ${family} built from ${builtFrom}, versions ${versions.join(", ")}`,
+  );
+  return {
+    ok: true,
+    linked: true,
+    probes,
+    quotationKey,
+    builtFrom,
+    current,
+    productKey,
+    family,
+    customer: f["customfield_10838"]?.value ?? null,
+    projectType: f["customfield_10052"]?.value ?? null,
+    versions,
+  };
+});
+
 // Thin wrapper — the UI's Compare button. Behaviour is unchanged.
 resolver.define("compareQuotation", async ({ payload }) =>
   runComparison(payload),
