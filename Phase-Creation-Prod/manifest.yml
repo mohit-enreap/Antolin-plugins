@@ -115,6 +115,7 @@ modules:
       function: enq-quot-issue-func
       events:
         - avi:jira:updated:issue
+        - avi:jira:created:issue
       filter:
         expression: "event.issue.fields?.project.key == 'QUOT'"
 

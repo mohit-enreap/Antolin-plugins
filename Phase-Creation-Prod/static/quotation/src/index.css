@@ -1,0 +1,213 @@
+:root {
+  --blue: #0b74d1;
+  --light: #f7fbfc;
+  --card: #fff;
+}
+body {
+  font-family:
+    Segoe UI,
+    Roboto,
+    Arial,
+    sans-serif;
+  margin: 0;
+  background: var(--light);
+  color: #222;
+}
+h1 {
+  margin: 18px 18px 8px;
+}
+.section {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+th,
+td {
+  border: 1px solid #ddd;
+  padding: 6px 8px;
+  text-align: center;
+  vertical-align: middle;
+}
+th {
+  background: var(--blue);
+  color: #fff;
+  font-weight: 600;
+}
+input[type="number"],
+input[type="text"],
+select {
+  padding: 6px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  width: 100%;
+  box-sizing: border-box;
+}
+input[type="checkbox"] {
+  transform: scale(1.05);
+}
+.btn {
+  background: var(--blue);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  margin: 6px 0;
+}
+
+.btn2 {
+  /* Use a transparent version of your blue or a light grey */
+  background: rgba(0, 82, 204, 0.08);
+  color: var(--blue);
+
+  border: none;
+  border-radius: 4px; /* Slightly tighter radius for a professional look */
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  margin: 6px 0;
+
+  /* Smooth transition for the hover effect */
+  transition:
+    background 0.2s ease,
+    transform 0.1s ease;
+}
+
+.btn2:hover {
+  background: rgba(0, 82, 204, 0.15);
+  color: var(--blue-dark, #004299); /* Slightly darken text on hover */
+}
+
+.btn2:active {
+  transform: scale(0.98); /* Subtle "click" feel */
+}
+
+.btn-download {
+  /* Layout & Alignment */
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  
+  /* Subtle Styling */
+  background-color: #ffffff;
+  color: #374151; /* Dark grey, less harsh than pure black */
+  border: 1px solid #d1d5db; /* Light grey border */
+  border-radius: 6px;
+  
+  /* Typography */
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  
+  /* Smooth interaction */
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-download:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+  color: #111827; /* Darker on hover */
+}
+
+.btn-download:active {
+  background-color: #f3f4f6;
+  transform: scale(0.97); /* Subtle "click" depression */
+}
+
+.btn-download svg {
+  /* Inherits color from the button text automatically */
+  flex-shrink: 0;
+}
+
+textarea {
+  width: 100%;
+  height: 160px;
+  font-family: monospace;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.small {
+  font-size: 12px;
+  color: #555;
+}
+.muted {
+  color: #666;
+}
+.controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+.resultTableWrapper {
+  background: #fff;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #eee;
+}
+
+/* Allow the container to fill the space naturally */
+.table-container {
+  width: 100%;
+}
+
+/* Table takes full width */
+.config-table {
+  width: 100%;
+}
+
+/* Row-only borders for clean distinction */
+.config-table th,
+.config-table td {
+  border: none;
+  border-bottom: 1px solid #dcdcdc;
+  padding: 12px 16px;
+}
+
+/* First column (Product): Left aligned, takes up half the table space */
+.config-table th:first-child,
+.config-table td:first-child {
+  text-align: left;
+  width: 50%;
+}
+
+/* Second and Third columns: Centered text, take up the remaining space equally */
+.config-table th:nth-child(2),
+.config-table td:nth-child(2),
+.config-table th:nth-child(3),
+.config-table td:nth-child(3) {
+  text-align: center;
+  width: 25%;
+}
+
+/* Stop inputs and selects from stretching fully across wide screens */
+.config-table td select,
+.config-table td input[type="number"] {
+  max-width: 240px; 
+  margin: 0 auto; /* Centers the input within the cell */
+}
+
+/* Header matching your variables */
+.config-table thead th {
+  background-color: var(--blue);
+  color: #fff;
+  border-bottom: none;
+}
+
+/* Hover effect */
+.config-table tbody tr:hover {
+  background-color: rgba(11, 116, 209, 0.05);
+}

@@ -1,0 +1,265 @@
+our CAD module (currently) works like this:
+
+⭕ App.jsx (Parent)
+→ holds the whole CAD calculator UI
+
+⭕ useActivityLogic.js
+→ FULL logic of reading/updating JSON
+→ Global param changes
+→ Product value updates
+→ Sub-item updates
+→ Toggle Activity YES/NO
+
+⭕ useCalculations.js
+→ Temp Calculator
+→ Final Calculator
+
+⭕ GlobalParams.jsx
+→ Shows YES/NO toggles for TDL, COO, DE, 2D, Data Management
+
+⭕ ActivityContainer.jsx
+→ Shows all activities + products + sub items
+
+⭕ TempResultTable / FinalResultTable
+→ Show calculated results
+
+Everything is perfectly structured!
+
+⭐ PART 2 — Folder-by-Folder Explanation
+📁 1. data/
+📄 jsonData.js
+
+This contains your entire ** raw JSON model**:
+
+Global keys
+
+Activity list
+
+Products
+
+Sub-items
+
+This is your CAD "database".
+
+📁 2. hooks/
+
+Contains your business logic.
+
+1️⃣ useActivityLogic.js (THE BRAIN)
+
+This hook controls:
+
+✔ jsonData
+✔ globalParams
+✔ updateGlobalParam
+✔ toggleActivityChecked
+✔ updateProductValue
+✔ updateSubValue
+
+This is where 90% of your app logic lives.
+
+Think of it like a “CAD Controller”.
+
+2️⃣ useGlobalParams.js
+
+Only handles:
+
+✔ YES/NO interactions
+✔ Mapping values
+✔ Updating states
+✔ Converting YES/NO → true/false → numeric factors
+
+This keeps App.jsx clean.
+
+3️⃣ useCalculations.js
+
+Handles math:
+
+✔ Temp calculation
+✔ Final calculation
+
+Formula based on:
+
+global factors
+
+product values
+
+sub item values
+
+activity toggle
+
+This was earlier inside App.jsx — now moved to make it cleaner.
+
+📁 3. components/
+
+This contains UI only.
+
+No logic.
+
+📁 A) global/
+📄 GlobalParams.jsx
+
+This renders the top UI:
+
+TDL [YES/NO]
+COO [YES/NO]
+DE [YES/NO]
+2D [YES/NO]
+Data Management [YES/NO]
+Geometrical Study [YES/NO]
+
+
+Fully controlled by useGlobalParams.
+
+📁 B) activity/
+
+These are activity-level UIs.
+
+📄 ActivityContainer.jsx
+
+Responsible for:
+
+✔ Loop through activities
+✔ Show header + products + sub items
+
+📄 ActivityHeader.jsx
+
+Shows:
+
+[✔] Activity Name
+
+
+Tick = include this activity
+Untick = skip totally in calculation
+
+📄 ActivityProducts.jsx
+
+Contains:
+
+✔ Product table (for NORMAL ROOF, PANO ROOF)
+✔ Sub-item table (Side panel, Glass run, etc.)
+
+📁 C) product/
+📄 ProductTable.jsx
+
+Renders table for each activity:
+
+TDL | COO | DE  ← inputs
+
+📄 ProductMainRow.jsx
+
+Renders product names:
+
+NORMAL ROOF
+PANO ROOF
+
+
+With numeric input boxes for TDL/COO/DE.
+
+📄 ProductSubRow.jsx
+
+Renders sub-item rows:
+
+Side Panel
+Glass Run
+
+
+With numeric inputs.
+
+📁 D) results/
+
+Contains UI for result tables.
+
+📄 TempResultTable.jsx
+
+Shows temporary results.
+
+📄 FinalResultTable.jsx
+
+Shows final result after Save.
+
+📄 JsonViewer.jsx
+
+Pretty-prints final JSON.
+
+📁 4. utils/
+📄 helpers.js
+
+Contains:
+
+✔ escape quotes
+✔ sorting functions
+✔ value validator
+✔ small utility functions
+
+This keeps UI components clean.
+
+⭐ PART 3 — How App.jsx Controls Everything
+📄 App.jsx
+
+Is only a coordinator, not logic.
+
+It:
+
+✔ Calls useActivityLogic()
+✔ Calls useCalculations()
+✔ Sends data to components
+✔ Renders:
+
+GlobalParams
+
+ActivityContainer
+
+Results tables
+
+✔ Two buttons:
+
+Calculate Temp
+Save Final
+
+⭐ PART 4 — What This Means for CAD Module
+
+Your CAD module is already:
+
+✔ Clean
+✔ Modular
+✔ Professional
+✔ Easy to extend
+✔ Easy to convert into independent module
+✔ Can be moved under src/modules/CAD/ anytime
+
+You are 90% ready for modularization.
+
+⭐ PART 5 — What You Want To Do Next
+
+Now your next goal:
+
+👉 Move all CAD code into
+
+src/modules/CAD/
+
+
+And then create:
+
+src/modules/CAE/
+src/modules/PS/
+
+
+I can guide you step-by-step.
+
+⭐ IMPORTANT QUESTION
+
+Do you want me to move this EXISTING code into the new folder structure?
+
+Example:
+
+src/modules/CAD/hooks/useCADActivityLogic.js
+src/modules/CAD/components/global/CADGlobalParams.jsx
+src/modules/CAD/components/activity/CADActivityContainer.jsx
+...
+
+✔ YES — Move everything into modules (CAD only first)
+
+or
+
+✔ NO — Keep current structure and only seed CAE + PS folders

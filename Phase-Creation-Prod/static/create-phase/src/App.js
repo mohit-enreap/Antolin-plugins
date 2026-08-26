@@ -1,3 +1,4 @@
+// Create Phase
 // src/App.js
 
 import React, { useState, useEffect } from "react";
@@ -99,25 +100,21 @@ const App = () => {
     reWorkLoop: 0,
     standard: null,
     checked: true,
-  }); //This is for the "Add new activity manually" feature.
+  });
 
-  const [created, setCreated] = useState(false); // checked phase already created or not
+  const [created, setCreated] = useState(false);
   const [milestones, setMilestones] = useState({});
-  console.log("milestone " + milestones); //holds ALL milestone data
+  console.log("milestone " + milestones);
 
-  const [activities, setActivities] = useState({}); //This holds ALL activity data.
+  const [activities, setActivities] = useState({});
 
   const [totalHours, setTotalHours] = useState(0);
   const [standardHours, setStandardHours] = useState(0);
   const [extraHours, setExtraHours] = useState(0);
   const [reworkHours, setReworkHours] = useState(0);
-  //All four of these are calculated values — they are never set manually by the user. They get recalculated automatically in useEffect whenever activities changes.
-
   const [threeDModifications, setThreeDModifications] = useState(0);
   const [twoDModifications, setTwoDModifications] = useState(0);
   const [dataManagement, setDataManagement] = useState(0);
-  //They measure how many hours came from 3D work vs 2D work vs data management.
-
   const [product, setProduct] = useState("");
 
   const [iterations, setIterations] = useState(0);
@@ -150,9 +147,11 @@ const App = () => {
       (acc, [key, activity]) =>
         acc +
         (!key.includes("ITERATIONS") &&
-        activity.checked &&
-        activity.standardLoop
-          ? activity.total
+          activity.checked &&
+          activity.standardLoop
+          ? activity.total == activity.standard   // New change in WO (after Quotation integration)
+            ? activity.total
+            : activity.standard   // till here
           : 0),
       0,
     );
@@ -162,26 +161,24 @@ const App = () => {
         acc +
         (activity.checked ? activity.standardLoop * activity.standard : 0),
       0,
-    ); // standard hours calculation is based on standardLoop value. If standardLoop is 0, it means the activity is not selected for standard hours, and thus contributes 0 to the total standard hours. If standardLoop is 1, it means the activity is selected for standard hours, and contributes its full standard hours to the total.
-
+    );
     const extra = Object.values(activities).reduce(
       (acc, activity) =>
         acc +
         (activity.checked ? activity.extraWorkLoop * activity.standard : 0),
       0,
     );
-
     const rework = Object.values(activities).reduce(
       (acc, activity) =>
         acc + (activity.checked ? activity.reWorkLoop * activity.standard : 0),
       0,
     );
-
     const _dataManagement = Object.entries(activities)
       .filter(
         ([key, value]) =>
           (key.includes("Customer input data management") ||
             key.includes("Data management") ||
+            key.includes("Data Management") ||
             key.includes("Upload & Download customer data")) &&
           value.checked &&
           value.standardLoop,
@@ -208,7 +205,8 @@ const App = () => {
                 value.checked &&
                 value.standardLoop,
             )
-            .reduce((sum, [key, value]) => sum + (value.standard || 0), 0) *
+            .reduce((sum, [key, value]) => sum + (value.DE || 0), 0) * // Changed value.standard to value.DE
+            (activities["ITERATIONS|ITERATIONS"]?.noOfLoops || 1) *
             (activities["ITERATIONS|ITERATIONS"]?.percentage || 0)) /
           100
         ).toFixed(2) || 0;
@@ -216,13 +214,14 @@ const App = () => {
       setIterations(parseFloat(_Iteration));
 
       if (
-        activities["ITERATIONS|ITERATIONS"].checked &&
-        activities["ITERATIONS|ITERATIONS"].standardLoop > 0
+        activities["ITERATIONS|ITERATIONS"]?.checked &&
+        activities["ITERATIONS|ITERATIONS"]?.standardLoop > 0
       ) {
         sum = parseFloat(sum) + parseFloat(_Iteration);
       }
       // console.log("HELLO sum",sum)
     } catch (e) {
+      console.log("From error: \n", activities);
       console.error(e);
     }
 
@@ -233,9 +232,12 @@ const App = () => {
     setDataManagement(_dataManagement);
     setTwoDModifications(_2DModification);
     setThreeDModifications(sum - _2DModification - _dataManagement);
+
+    console.log("Initial Load---> \nTotal Hrs:", sum, "\nStandard:", standard);
   }, [activities]);
 
   const phaseOptions = [
+    { label: "Offer", value: "Offer" },
     { label: "Proto", value: "Proto" },
     { label: "Serie", value: "Serie" },
     { label: "Industrialization", value: "Industrialization" },
@@ -343,7 +345,7 @@ const App = () => {
       ...prev,
       [key]: { ...prev[key], checked: !prev[key].checked },
     }));
-  }; //Called when: User clicks a milestone checkbox.
+  };
 
   const handleMilestoneLoopChange = (key, value) => {
     const loops = parseInt(value, 10);
@@ -887,9 +889,8 @@ const App = () => {
 
         {/* Milestones Table */}
         {/* {phaseName.value != "Industrialization" &&
-        !product.includes("- CAE") */}
-
-        {phaseName.value != "Industrialization" ? (
+        !product.includes("- CAE")  */}
+        {phaseName.value != "Industrialization" && phaseName.value != "Offer" ? (
           <>
             <SectionHeader>Milestones to Generate</SectionHeader>
             {renderMilestoneTable(
