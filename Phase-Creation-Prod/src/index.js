@@ -1855,8 +1855,8 @@ function updateIndustrializationValuesFromQuotation(
 // });
 
 /// NEW
-resolver.define("getConfigData", async ({ payload }) => {
-  let { issue, phase, key } = payload;
+async function computeConfigData(payload) {
+  let { issue, phase, key, versionOverride } = payload;
   console.log("fetching...");
   console.log("Key" + key, issue);
 
@@ -1884,7 +1884,7 @@ resolver.define("getConfigData", async ({ payload }) => {
     const parts = quotationField.split(" ## ");
     // const quotationSummary = parts[0];
     const quotation = parts[1];
-    const quotationVersion = parts[2];
+    const quotationVersion = versionOverride || parts[2];
 
     const productParts = issueDetail.fields["customfield_10074"].map(
       (element) => element.value,
@@ -2129,7 +2129,14 @@ resolver.define("getConfigData", async ({ payload }) => {
       : { product: key, activity: updatedActivities };
   }
   return {};
-});
+}
+
+// The body above moved out of the resolver so the quotation compare can call
+// it directly — backend code cannot invoke a resolver. Every existing caller
+// passes no versionOverride, so the behaviour is unchanged.
+resolver.define("getConfigData", async ({ payload }) =>
+  computeConfigData(payload),
+);
 
 ///////////////////////////////////////////////////
 // Listener
