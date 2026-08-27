@@ -5633,7 +5633,7 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
   const qres = await api
     .asApp()
     .requestJira(
-      route`/rest/api/3/issue/${quotationKey}?fields=customfield_12257,customfield_12060`,
+      route`/rest/api/3/issue/${quotationKey}?fields=customfield_12257,customfield_12060,status`,
     );
   if (!qres.ok) {
     return {
@@ -5654,6 +5654,7 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
   // The field can lag by one when a version was just saved, so fold in the
   // current one rather than trusting the list alone.
   const current = qf["customfield_12060"] || null;
+  const quotStatus = qf.status?.name || null;
   if (current && !versions.includes(current)) versions.push(current);
   if (builtFrom && !versions.includes(builtFrom)) versions.push(builtFrom);
 
@@ -5663,13 +5664,26 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
       parseInt(String(b).replace(/\D/g, ""), 10),
   );
 
+  // Only a closed version is safe to compare against — a draft's hours are
+  // still moving. Every version except the current one has already been through
+  // Closed, since that is the only route to Re-Quotation; the current one is
+  // closed only while the issue itself is.
+  //
+  // builtFrom is NOT excluded. customfield_12738 only records what the link
+  // says, not that the hierarchy was built from it: a project created from
+  // Phase Configuration and linked to a quotation afterwards names a version it
+  // was never built from, and that is exactly the comparison the user wants.
+  const closed = versions.filter(
+    (v) => v !== current || quotStatus === "Closed",
+  );
+
   // Probe the storage keys getConfigData would look for. Same key construction,
   // so a miss here is the miss Create Phase is having — and it says so in the
   // browser console rather than needing forge logs.
   const baseKey = family === "CAD" ? productKey : productKey.split(" -")[0];
   const customerName = f["customfield_10838"]?.value ?? null;
   const probes = [];
-  for (const v of versions) {
+  for (const v of closed) {
     const k = `Quot_WO_${baseKey}_${customerName}_${quotationKey}_${family}_${v}`;
     let found = false;
     let size = 0;
@@ -5685,13 +5699,15 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
   }
 
   console.log(
-    `[ver] ${projectKey} -> ${quotationKey} ${family} built from ${builtFrom}, versions ${versions.join(", ")}`,
+    `[ver] ${projectKey} -> ${quotationKey} ${family} status ${quotStatus}, current ${current}, built from ${builtFrom}, closed ${closed.join(", ") || "none"}`,
   );
   return {
     ok: true,
     linked: true,
     probes,
     quotationKey,
+    quotStatus,
+    closed,
     builtFrom,
     current,
     productKey,
@@ -5699,6 +5715,152 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
     customer: f["customfield_10838"]?.value ?? null,
     projectType: f["customfield_10052"]?.value ?? null,
     versions,
+  };
+});
+
+// ─── QUOTATION DUMP (read-only) — never writes, never deletes ────────────────
+// Everything the compare will need from a quotation blob, printed rather than
+// guessed at: the exact key getConfigData builds, whether the blob is there,
+// what shape it has, and — when two versions are given — precisely which
+// activities and multipliers differ between them.
+resolver.define("dumpQuotation", async ({ payload }) => {
+  const projectKey = payload?.issue?.key;
+  const wantVersion = payload?.version || null;
+  if (!projectKey) return { ok: false, error: "NO_ISSUE" };
+
+  const res = await api
+    .asApp()
+    .requestJira(
+      route`/rest/api/3/issue/${projectKey}?fields=customfield_12059,customfield_12738,customfield_10073,customfield_10838,customfield_10052`,
+    );
+  const f = (await res.json()).fields || {};
+  const linked = (f["customfield_12059"]?.value ?? "No") === "Yes";
+  const parts = String(f["customfield_12738"] || "").split(" ## ");
+  const quotationKey = parts[1] || null;
+  const builtFrom = parts[2] || null;
+  const productKey = f["customfield_10073"]?.value ?? null;
+  const customer = f["customfield_10838"]?.value ?? null;
+  const projectType = f["customfield_10052"]?.value ?? null;
+  if (!linked || !quotationKey || !productKey) {
+    return { ok: true, linked: false, projectKey, reason: "NOT_LINKED" };
+  }
+  const family = productKey.includes("- CAE")
+    ? "CAE"
+    : productKey.includes("- PS")
+      ? "PS"
+      : "CAD";
+  const baseKey = family === "CAD" ? productKey : productKey.split(" -")[0];
+
+  // Exactly how getConfigData reads it: base64 -> inflate -> parse.
+  async function load(v) {
+    const key = `Quot_WO_${baseKey}_${customer}_${quotationKey}_${family}_${v}`;
+    const out = { version: v, key, found: false };
+    try {
+      const b64 = await storage.get(key);
+      if (!b64) return out;
+      out.found = true;
+      out.base64Length = typeof b64 === "string" ? b64.length : 0;
+      const data = JSON.parse(
+        pako.inflate(base64ToUint8Array(b64), { to: "string" }),
+      );
+      out.topKeys = Object.keys(data);
+      out.activityCount = Object.keys(data.activities || {}).length;
+      out.phases = data.Phases || null;
+      out.offerActivities = Object.keys(data.Offer?.activities || {});
+      out.industrialization = Object.keys(data.Industrialization || {});
+      out.data = data;
+    } catch (e) {
+      out.error = e?.message;
+    }
+    return out;
+  }
+
+  const a = await load(builtFrom);
+  const b =
+    wantVersion && wantVersion !== builtFrom ? await load(wantVersion) : null;
+
+  // What actually differs. A version bump moves the Proto and Serie multipliers
+  // rather than TDL/COO/DE, so those are what the compare will pick up.
+  let diff = null;
+  if (a.data && b?.data) {
+    const META = ["extraWorkLoop", "reWorkLoop", "standardLoop", "checked"];
+    const rows = [];
+    const names = new Set([
+      ...Object.keys(a.data.activities || {}),
+      ...Object.keys(b.data.activities || {}),
+    ]);
+    for (const n of names) {
+      const x = a.data.activities?.[n];
+      const y = b.data.activities?.[n];
+      if (!x || !y) {
+        rows.push({
+          activity: n,
+          change: x ? "removed in new" : "added in new",
+        });
+        continue;
+      }
+      for (const m of META) {
+        if (x[m] !== y[m])
+          rows.push({ activity: n, field: m, from: x[m], to: y[m] });
+      }
+      for (const part of Object.keys(x)) {
+        if (META.includes(part) || part === "order") continue;
+        const p = x[part];
+        const q = y[part];
+        if (!p || typeof p !== "object" || !q) continue;
+        for (const fl of [
+          "TDL",
+          "COO",
+          "DE",
+          "Proto",
+          "Serie",
+          "noOfComponent",
+          "componentSelected",
+        ]) {
+          if (p[fl] !== q[fl])
+            rows.push({
+              activity: `${n} | ${part}`,
+              field: fl,
+              from: p[fl],
+              to: q[fl],
+            });
+        }
+      }
+    }
+    diff = { count: rows.length, rows: rows.slice(0, 80) };
+    console.log(
+      `[quot] ${builtFrom} -> ${wantVersion}: ${rows.length} differences`,
+    );
+    rows
+      .slice(0, 25)
+      .forEach((r) =>
+        console.log(
+          `[quot]   ${r.activity} ${r.field || ""} ${r.from} -> ${r.to}`,
+        ),
+      );
+  }
+
+  // The blobs themselves are large; keep them out of the returned object.
+  delete a.data;
+  if (b) delete b.data;
+  console.log(`[quot] ${a.found ? "FOUND  " : "MISSING"} ${a.key}`);
+  if (b) console.log(`[quot] ${b.found ? "FOUND  " : "MISSING"} ${b.key}`);
+
+  return {
+    ok: true,
+    linked: true,
+    projectKey,
+    quotationKey,
+    productKey,
+    baseKey,
+    customer,
+    projectType,
+    family,
+    builtFrom,
+    compareTo: wantVersion,
+    current: a,
+    target: b,
+    diff,
   };
 });
 

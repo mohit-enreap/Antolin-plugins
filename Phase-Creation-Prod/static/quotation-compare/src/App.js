@@ -1107,13 +1107,11 @@ function App() {
         });
         console.log("[ver]", vi);
         setVersionInfo(vi);
-        if (vi?.linked && vi.versions?.length) {
-          // Default to the newest version that is not the one already built,
-          // since comparing a project against itself shows nothing.
-          const later = vi.versions.filter((v) => v !== vi.builtFrom);
-          setTargetVersion(
-            later[later.length - 1] || vi.versions[vi.versions.length - 1],
-          );
+        if (vi?.linked && vi.closed?.length) {
+          // Newest closed version. builtFrom is not excluded — a project built
+          // from Phase Configuration and linked afterwards must still be able
+          // to compare against the version the link names.
+          setTargetVersion(vi.closed[vi.closed.length - 1]);
         }
       } catch (e) {
         setError("Could not read the project context. Reload the page.");
@@ -1212,6 +1210,17 @@ function App() {
   const dump = async () => {
     const res = await invoke("dumpStorage", { issue });
     console.log("[dump] storage:", res);
+  };
+
+  // Prints the real quotation blob rather than inferring it from behaviour:
+  // the key, whether it exists, its shape, and what differs against the
+  // version selected in the dropdown.
+  const quot = async () => {
+    const res = await invoke("dumpQuotation", {
+      issue,
+      version: targetVersion,
+    });
+    console.log("[quot]", res);
   };
 
   // Temporary, for the transition step: what can each issue type actually do
@@ -1322,7 +1331,7 @@ function App() {
                 onChange={(e) => setTargetVersion(e.target.value)}
               >
                 {versionInfo?.linked ? (
-                  versionInfo.versions.map((v) => (
+                  versionInfo.closed.map((v) => (
                     <option key={v} value={v}>
                       {v}
                       {v === versionInfo.builtFrom ? "  (built from this)" : ""}
@@ -1344,6 +1353,15 @@ function App() {
               title="Print stored Create Phase data to the browser console"
             >
               Storage
+            </button>
+            <button
+              className="cq-btn"
+              onClick={quot}
+              disabled={!issue || !versionInfo?.linked}
+              style={{ background: T.muted }}
+              title="Print the quotation blob and what differs against the selected version"
+            >
+              Quotation
             </button>
             <button
               className="cq-btn"
