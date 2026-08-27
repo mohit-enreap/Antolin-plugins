@@ -1125,7 +1125,10 @@ function App() {
     setData(null);
     setTab(0);
     try {
-      const res = await invoke("compareQuotation", { issue });
+      const res = await invoke("compareQuotation", {
+        issue,
+        version: targetVersion,
+      });
       if (!res || res.ok !== true) {
         setError(
           (res && (res.message || res.reason)) ||
@@ -1148,7 +1151,7 @@ function App() {
     setPlanData(null);
     setTab(0);
     try {
-      const res = await invoke("applyPlan", { issue });
+      const res = await invoke("applyPlan", { issue, version: targetVersion });
       console.log("[plan] result:", res);
       if (!res || res.ok !== true) {
         setError(
@@ -1182,7 +1185,11 @@ function App() {
       const prev = await invoke("getLastOverwrite", { issue, phaseKey });
       const prevAt = prev?.record?.at ?? null;
 
-      const res = await invoke("applyWrites", { issue, phaseKey });
+      const res = await invoke("applyWrites", {
+        issue,
+        phaseKey,
+        version: targetVersion,
+      });
       console.log("[write] queued:", res);
       if (!res || res.ok !== true) {
         setError((res && res.message) || "Could not queue the overwrite.");
@@ -1221,6 +1228,20 @@ function App() {
       version: targetVersion,
     });
     console.log("[quot]", res);
+  };
+
+  // The cook's own output for the phase tab you are on, so the numbers on
+  // screen can be checked against what computeConfigData actually returned.
+  const cook = async () => {
+    const label = phases[tab]?.phase || "";
+    // Tabs read "01 Proto"; the cook wants "Proto".
+    const phase = label.replace(/^\d+\s*/, "").trim() || "Proto";
+    const res = await invoke("dumpCook", {
+      issue,
+      phase,
+      version: targetVersion,
+    });
+    console.log("[cook]", res);
   };
 
   // Temporary, for the transition step: what can each issue type actually do
@@ -1362,6 +1383,15 @@ function App() {
               title="Print the quotation blob and what differs against the selected version"
             >
               Quotation
+            </button>
+            <button
+              className="cq-btn"
+              onClick={cook}
+              disabled={!issue || !phases[tab]?.phase}
+              style={{ background: T.muted }}
+              title="Print the cooked hours for this phase, and for the selected version"
+            >
+              Cook
             </button>
             <button
               className="cq-btn"

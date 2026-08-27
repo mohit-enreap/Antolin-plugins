@@ -4989,127 +4989,6 @@ async function fetchWbsChildren(issueKey) {
     }));
 }
 
-// TEMPORARY (Step 3): faithful replay of getConfigData's activity-branch cook.
-// Re-parses the blob fresh per call because processJsonWithPhase mutates in place.
-// Removed in Step 7 when we extract the shared cookActivities from getConfigData.
-// COMPATIBILITY SEAM (demo vs Sayan quotation):
-// `recipe` is the NEW-side product/quotation object ({ activities, id, ... }).
-// DEMO: caller passes blob[COOK_KEY]. REAL: caller passes the storage.get'd
-// Quot_WO_... object — SAME shape, so this cook is unchanged either way.
-// `productKey` is kept only for the CAE short-circuit + logging.
-async function cookActivitiesTemp(
-  recipe,
-  productKey,
-  phase,
-  productParts,
-  customer,
-  projectKey,
-) {
-  // still need the blob for the SHARED sections (2D Drawing, Data Management)
-  const base64String = await storage.get(STORAGE_KEY);
-  const uint8Arr = base64ToUint8Array(base64String);
-  const decompressedString = pako.inflate(uint8Arr, { to: "string" });
-  const data = JSON.parse(decompressedString); // fresh parse each call
-
-  console.log(
-    `[compare] cook key="${productKey}" phase="${phase}" part0="${productParts[0]}" customer="${customer}"`,
-  );
-
-  if (!recipe || !recipe.activities) {
-    console.log(`[compare] cook: no recipe/activities for "${productKey}"`);
-    return {};
-  }
-  if (productKey.includes("- CAE")) return recipe.activities;
-
-  // Industrialization does not cook from the product recipe. Production
-  // (getConfigData ~1624) builds it from the per-project Proto/Serie snapshots
-  // written at phase creation, against the shared "Industrialization" section.
-  if (phase === "Industrialization") {
-    const proto = await storage.get(`${projectKey}_Industrialization_Proto`);
-    const serie = await storage.get(`${projectKey}_Industrialization_Serie`);
-    const ind = data["Industrialization"];
-    if (!ind || !ind.activities) {
-      console.log(`[compare] no Industrialization section in blob`);
-      return {};
-    }
-    // Percentages may be absent for this product. Production passes the
-    // lookup through and lets updateIndustrializationValues fall back to its
-    // 15/15/15 default, so hand over undefined rather than bailing out.
-    return updateIndustrializationValues(
-      proto,
-      serie,
-      JSON.parse(JSON.stringify(ind.activities)),
-      ind.percentages ? ind.percentages[productKey] : undefined,
-    );
-  }
-
-  // pass 1: phase multiply + sum selected parts
-  let cooked = calculateSumsWithTotal(
-    processJsonWithPhase(recipe.activities, phase),
-    productParts,
-  );
-
-  // pass 2: 2D Drawing (diagnostic-guarded)
-  const _2DDrawing = data["2D Drawing"]?.activities?.[productKey];
-  const _2DPct = data["2D Drawing"]?.percentages;
-  console.log(
-    `[compare]   2D: drawing defined=${!!_2DDrawing}, pct defined=${!!_2DPct}, pct[phase]=${_2DPct?.[phase]}`,
-  );
-  if (_2DDrawing && _2DPct) {
-    cooked = calculateSumsWithTotal(
-      update2DDrawingData(
-        recipe.activities,
-        _2DDrawing,
-        productParts,
-        _2DPct,
-        phase,
-      ),
-      productParts,
-    );
-  } else {
-    console.log(
-      `[compare]   2D: SKIPPED (missing input) — differs from getConfigData!`,
-    );
-  }
-
-  // pass 3: Data Management (diagnostic-guarded)
-
-  const _dmCustomers = data["Data Management"]?.customers?.[productKey];
-  const _dmTime = _dmCustomers?.[customer] ?? _dmCustomers?.["Standard"];
-  const _dmPct = data["Data Management"]?.percentages;
-  console.log(
-    `[compare]   DM: customers[key] defined=${!!_dmCustomers}, time=${_dmTime}, pct[phase]=${_dmPct?.[phase]}`,
-  );
-  if (_dmTime !== undefined && _dmPct) {
-    cooked = calculateSumsWithTotal(
-      updateDataManagement(
-        recipe.activities,
-        _dmTime,
-        productParts,
-        _dmPct,
-        phase,
-      ),
-      productParts,
-    );
-  } else {
-    console.log(
-      `[compare]   DM: SKIPPED (missing input) — differs from getConfigData!`,
-    );
-  }
-
-  cooked._diag = {
-    phase,
-    part0: productParts[0],
-    customer,
-    twoD_drawingDefined: !!_2DDrawing,
-    twoD_pctPhase: _2DPct?.[phase],
-    dm_customersDefined: !!_dmCustomers,
-    dm_time: _dmTime,
-    dm_pctPhase: _dmPct?.[phase],
-  };
-  return cooked;
-}
-
 // Returns the list of pickable quotation product keys (excludes internal sections).
 resolver.define("listQuotations", async () => {
   const base64String = await storage.get(STORAGE_KEY);
@@ -5150,61 +5029,22 @@ resolver.define("listQuotations", async () => {
   return { keys };
 });
 
-// TEMPORARY revision resolver — naming convention only ("X New" in the blob).
-// DEMO ONLY: current hierarchy vs "Centre Console New". Sayan's stored-quotation
-// system is not deployed yet.
-//
-// REAL VERSION (swap this ONE function + getNewRevisionRecipe below when live):
-//   - parse issue customfield_11696 = "summary ## quotation ## version" (split " ## ")
-//   - family from Product-BU (10073): "- CAE"→CAE, "- PS"→PS, else CAD
-//   - baseKey = productBU.split(" -")[0]
-//   - key = `Quot_WO_${baseKey}_${customer}_${quotation}_${family}_${version}`
-//   - stored value is a RAW recipe (same .activities shape) → cook path unchanged
-//   - NEW-side 2D/DM must switch to "2D Drawing - Quotation" /
-//     "Data Management - Quotation" + projectType routing (Sayan getConfigData ~1962/1994)
-//   - PAIRING unresolved: 11696 holds the version BUILT from (V1); finding a NEWER
-//     one (V2+) needs storage enumeration or a user-picked version.
-function resolveNewRevisionKey(currentProductKey) {
-  return `${currentProductKey} New`;
-}
-
 // The unrounded cook for one phase. runComparison rounds to one decimal for
 // display; the snapshot stores raw values, so Step 5 needs what it rounds away.
 // Sits here because it uses resolveNewRevisionKey above and cookActivitiesTemp
 // at 3517.
-async function cookForPhase(projectKey, phaseName) {
-  const projRes = await api
-    .asApp()
-    .requestJira(
-      route`/rest/api/3/issue/${projectKey}?fields=customfield_10074,customfield_10838,customfield_10073`,
-    );
-  const f = (await projRes.json()).fields;
-  const productParts = (f.customfield_10074 || []).map((e) => e.value);
-  const customer = f.customfield_10838?.value;
-  const currentProductKey = f.customfield_10073?.value;
-  if (!currentProductKey) return null;
-
-  const COOK_KEY = resolveNewRevisionKey(currentProductKey);
-  const blob = JSON.parse(
-    pako.inflate(base64ToUint8Array(await storage.get(STORAGE_KEY)), {
-      to: "string",
-    }),
-  );
-  if (!blob[COOK_KEY]) return null;
-
-  // Deep copy for the same reason runComparison does it: processJsonWithPhase
-  // mutates in place and its no-subactivity branch multiplies rather than
-  // assigns, so a shared recipe compounds across phases.
-  const cooked = await cookActivitiesTemp(
-    JSON.parse(JSON.stringify(blob[COOK_KEY])),
-    COOK_KEY,
-    phaseName,
-    productParts,
-    customer,
-    projectKey,
-  );
-  delete cooked._diag;
-  return cooked;
+// The unrounded cook for one phase, from the version the caller names.
+// computeConfigData is Sayan's getConfigData body: it routes the quotation
+// catalogs, noOfComponent, the Phases gate, Industrialization and CAE, and it
+// re-parses the blob per call so nothing is shared between phases.
+async function cookForPhase(projectKey, phaseName, version) {
+  const res = await computeConfigData({
+    issue: { key: projectKey },
+    phase: phaseName,
+    key: "Activity",
+    versionOverride: version || null,
+  });
+  return res?.activity || null;
 }
 
 // A group with no standard hours is either an Extra Work / Re-Work group, or a
@@ -5266,6 +5106,10 @@ function previewVeto(flag, action, actual) {
 // A copy would drift the moment one side changed; one implementation cannot.
 async function runComparison(payload) {
   const { issue } = payload;
+  // The version picked in the dropdown. Absent means the project has no linked
+  // quotation, and computeConfigData falls back to the static catalog exactly
+  // as Create Phase does.
+  const version = payload?.version || null;
   const projectKey = issue.key;
   // Step 3c writes one phase, but this still cooked all three and read every
   // activity group in the project — roughly 60 fetches and three inflates, which
@@ -5301,27 +5145,10 @@ async function runComparison(payload) {
   //            compare code, not a quotation difference.
   //   Only meaningful while the catalog has not been edited since Create Phase
   //   ran for this project — otherwise the difference is catalog drift, not a bug.
-  const CALIBRATE = false;
-  const COOK_KEY = CALIBRATE
-    ? currentProductKey
-    : resolveNewRevisionKey(currentProductKey); // "X New"; swap when versioning lands
-
-  // guard: does the NEW revision actually exist in the blob?
-  const base64String = await storage.get(STORAGE_KEY);
-  const blob = JSON.parse(
-    pako.inflate(base64ToUint8Array(base64String), { to: "string" }),
-  );
-  if (!blob[COOK_KEY]) {
-    return {
-      ok: false,
-      error: "NO_NEW_REVISION",
-      message: `No newer revision available for "${currentProductKey}".`,
-      currentProduct: currentProductKey,
-    };
-  }
+  const COOK_KEY = version || currentProductKey;
 
   console.log(
-    `[compare] COOK project=${projectKey} current="${currentProductKey}" new="${COOK_KEY}" customer="${customer}" parts=${productParts.length}`,
+    `[compare] COOK project=${projectKey} product="${currentProductKey}" version="${version || "phase configuration"}" customer="${customer}" parts=${productParts.length}`,
   );
 
   const phases = await fetchWbsChildren(projectKey);
@@ -5340,27 +5167,11 @@ async function runComparison(payload) {
       );
     const phaseTotal = (await phRes.json()).fields?.customfield_10061 ?? null;
 
-    // Fetch the NEW-side recipe. DEMO: from the blob under COOK_KEY.
-    // REAL: replace this one line with the Quot_WO_... storage.get (see
-    // resolveNewRevisionKey comment). Shape is identical, so the cook is unchanged.
-    // Deep-copy per phase: processJsonWithPhase mutates in place, and its
-    // no-subactivity branch multiplies (*=) rather than assigns. Sharing one
-    // recipe object across phases compounds the multipliers — Stack up
-    // tolerances read 8400 in Serie instead of 140 (2 x 60 x 70 vs 2 x 70).
-    // Same guard the Industrialization branch already uses.
-    const newRecipe = JSON.parse(JSON.stringify(blob[COOK_KEY]));
-
-    // cook the NEW quotation for this phase
-    const cooked = await cookActivitiesTemp(
-      newRecipe,
-      COOK_KEY,
-      phaseName,
-      productParts,
-      customer,
-      projectKey,
-    );
-    const cookDiag = cooked._diag || null; // keep the defined-flags for the safeguard
-    delete cooked._diag; // drop it so it isn't treated as an activity
+    // Cook the selected version for this phase. computeConfigData re-parses the
+    // blob on every call, so the deep copy the old fork needed is unnecessary:
+    // processJsonWithPhase can only mutate that call's own data.
+    const cooked = (await cookForPhase(projectKey, phaseName, version)) || {};
+    const cookDiag = null;
 
     // read live AGs for this phase (key, summary, status, current std)
     // A Phase's WBSGantt children include Milestones (10012) as well as Activity
@@ -5433,10 +5244,17 @@ async function runComparison(payload) {
       const cur = round1(ag.currentStd);
 
       if (!hit) {
+        // With a linked quotation the cook's activity list IS the quotation's
+        // activity list, so absence means the activity was dropped — a real
+        // de-scope, and the ordinary REMOVE rules apply. Without one, the
+        // static catalog may simply have been edited or the name may not
+        // normalise, so ORPHAN stays safe and does nothing.
         verdicts.push({
           ...ag,
-          newStd: null,
-          verdict: "ORPHAN (no cooked match)",
+          newStd: version ? 0 : null,
+          verdict: version
+            ? "REMOVE (dropped from the quotation)"
+            : "ORPHAN (no cooked match)",
         });
         continue;
       }
@@ -5868,6 +5686,97 @@ resolver.define("dumpQuotation", async ({ payload }) => {
     current: a,
     target: b,
     diff,
+  };
+});
+
+// ─── COOK DUMP (read-only) — prints what the cook actually returns ───────────
+// Every other diagnostic shows inputs. This shows the OUTPUT: the cooked hours
+// per activity for a phase, and — when a version is given — the same phase
+// cooked from that version beside it. It calls computeConfigData, the same
+// function the compare uses, so it cannot disagree with what Compare shows.
+resolver.define("dumpCook", async ({ payload }) => {
+  const projectKey = payload?.issue?.key;
+  const phase = payload?.phase || "Proto";
+  const version = payload?.version || null;
+  if (!projectKey) return { ok: false, error: "NO_ISSUE" };
+
+  async function cook(v) {
+    try {
+      const r = await computeConfigData({
+        issue: { key: projectKey },
+        phase,
+        key: "Activity",
+        versionOverride: v,
+      });
+      return r?.activity || {};
+    } catch (e) {
+      console.error(`[cook] ${v || "linked version"} failed: ${e?.message}`);
+      return {};
+    }
+  }
+
+  // Left: whatever the project is linked to, i.e. what Create Phase would show.
+  // Right: the version picked in the dropdown.
+  const base = await cook(null);
+  const target = version ? await cook(version) : null;
+
+  const names = Array.from(
+    new Set([...Object.keys(base), ...Object.keys(target || {})]),
+  ).sort();
+  const r1 = (n) =>
+    n === null || n === undefined ? null : Number(Number(n).toFixed(1));
+
+  const rows = names.map((n) => {
+    const a = base[n] || {};
+    const b = target ? target[n] || {} : {};
+    const row = {
+      activity: n,
+      std: r1(a.standard),
+      TDL: r1(a.TDL),
+      COO: r1(a.COO),
+      DE: r1(a.DE),
+    };
+    if (target) {
+      row.newStd = r1(b.standard);
+      row.newTDL = r1(b.TDL);
+      row.newCOO = r1(b.COO);
+      row.newDE = r1(b.DE);
+      row.delta =
+        row.std === null || row.newStd === null
+          ? null
+          : r1(row.newStd - row.std);
+    }
+    return row;
+  });
+
+  const sum = (k) => r1(rows.reduce((t, x) => t + (x[k] || 0), 0));
+
+  console.log(
+    `[cook] ${projectKey} ${phase}: ${Object.keys(base).length} activities, total ${sum("std")}` +
+      (target
+        ? ` -> ${version}: ${Object.keys(target).length} activities, total ${sum("newStd")}`
+        : ""),
+  );
+  rows
+    .filter((x) => !target || x.delta !== 0)
+    .slice(0, 60)
+    .forEach((x) =>
+      console.log(
+        `[cook]   ${x.activity.padEnd(52).slice(0, 52)} ${String(x.std).padStart(9)}` +
+          (target ? ` -> ${String(x.newStd).padStart(9)}  ${x.delta}` : ""),
+      ),
+    );
+
+  return {
+    ok: true,
+    projectKey,
+    phase,
+    version,
+    baseCount: Object.keys(base).length,
+    baseTotal: sum("std"),
+    targetCount: target ? Object.keys(target).length : null,
+    targetTotal: target ? sum("newStd") : null,
+    rows,
   };
 });
 
