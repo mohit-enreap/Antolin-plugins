@@ -5665,9 +5665,48 @@ resolver.define("dumpQuotation", async ({ payload }) => {
       );
   }
 
-  // The blobs themselves are large; keep them out of the returned object.
-  delete a.data;
-  if (b) delete b.data;
+  // The catalogs the cook reads for 2D and Data Management. Without these the
+  // quotation blobs alone are not enough to reproduce the cooked hours.
+  let catalogs = null;
+  if (payload?.includeRaw) {
+    try {
+      const cfg = JSON.parse(
+        pako.inflate(base64ToUint8Array(await storage.get(STORAGE_KEY)), {
+          to: "string",
+        }),
+      );
+      catalogs = {
+        twoDQuotation:
+          cfg["2D Drawing - Quotation"]?.activities?.[projectType]?.[baseKey] ??
+          null,
+        // update2DDrawingData multiplies the catalog hours by a per-phase
+        // percentage, so the values alone cannot reproduce the cook.
+        twoDPercentages: cfg["2D Drawing - Quotation"]?.percentages ?? null,
+        dmQuotation:
+          cfg["Data Management - Quotation"]?.[projectType]?.customers?.[
+            baseKey
+          ]?.[customer] ??
+          cfg["Data Management - Quotation"]?.[projectType]?.customers?.[
+            baseKey
+          ]?.["Standard"] ??
+          null,
+        dmPercentages: cfg["Data Management - Quotation"]?.percentages ?? null,
+        // The cook sums only the parts selected on the project, so the totals
+        // cannot be checked without knowing which.
+        productParts: productParts ?? null,
+        industrialization: cfg[baseKey]?.["Industrialization"] ?? null,
+        phases: cfg[baseKey]?.["Phases"] ?? null,
+      };
+    } catch (e) {
+      catalogs = { error: e?.message };
+    }
+  }
+
+  // The blobs are large, so they are only returned when explicitly asked for.
+  if (!payload?.includeRaw) {
+    delete a.data;
+    if (b) delete b.data;
+  }
   console.log(`[quot] ${a.found ? "FOUND  " : "MISSING"} ${a.key}`);
   if (b) console.log(`[quot] ${b.found ? "FOUND  " : "MISSING"} ${b.key}`);
 
@@ -5685,6 +5724,7 @@ resolver.define("dumpQuotation", async ({ payload }) => {
     compareTo: wantVersion,
     current: a,
     target: b,
+    catalogs,
     diff,
   };
 });

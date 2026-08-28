@@ -1230,6 +1230,21 @@ function App() {
     console.log("[quot]", res);
   };
 
+  // The raw blobs plus the catalogs the cook reads, as one string. Logged as a
+  // string rather than an object because the console truncates nested objects
+  // and this needs to be copied whole.
+  const rawJson = async () => {
+    const res = await invoke("dumpQuotation", {
+      issue,
+      version: targetVersion,
+      includeRaw: true,
+    });
+    const text = JSON.stringify(res, null, 1);
+    console.log(`[raw] ${text.length} characters — copy the string below`);
+    console.log(text);
+    window.__raw = res;
+  };
+
   // The cook's own output for the phase tab you are on, so the numbers on
   // screen can be checked against what computeConfigData actually returned.
   const cook = async () => {
@@ -1383,6 +1398,15 @@ function App() {
               title="Print the quotation blob and what differs against the selected version"
             >
               Quotation
+            </button>
+            <button
+              className="cq-btn"
+              onClick={rawJson}
+              disabled={!issue || !versionInfo?.linked}
+              style={{ background: T.muted }}
+              title="Print both raw quotation blobs and the catalogs, for checking"
+            >
+              Raw JSON
             </button>
             <button
               className="cq-btn"
