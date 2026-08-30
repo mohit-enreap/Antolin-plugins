@@ -375,7 +375,7 @@ function Table({ verdicts, showVerdict }) {
             <th style={{ ...TH, width: 92, borderTopLeftRadius: 6 }}>Group</th>
             <th style={TH}>Activity</th>
             <th style={{ ...TH, width: 106, textAlign: "center" }}>
-              Current status
+              Old status
             </th>
             <th
               style={{
@@ -385,7 +385,7 @@ function Table({ verdicts, showVerdict }) {
                 whiteSpace: "nowrap",
               }}
             >
-              Current Std Hrs
+              Old Std Hrs
             </th>
             <th
               style={{
@@ -395,7 +395,7 @@ function Table({ verdicts, showVerdict }) {
                 whiteSpace: "nowrap",
               }}
             >
-              Actual Hrs
+              Act Hrs
             </th>
             <th style={{ ...TH, width: 106, textAlign: "center" }}>
               New status
@@ -413,12 +413,13 @@ function Table({ verdicts, showVerdict }) {
             <th
               style={{
                 ...TH,
-                width: 90,
+                width: 130,
                 textAlign: "center",
+                whiteSpace: "nowrap",
                 ...(showVerdict ? {} : { borderTopRightRadius: 6 }),
               }}
             >
-              Change
+              New Std − Old Std Hrs
             </th>
             {showVerdict ? (
               <th
