@@ -246,7 +246,7 @@ function Delta({ cur, nw }) {
   );
 }
 
-function DetailRows({ row }) {
+function DetailRows({ row, showVerdict }) {
   const rows = ROLES.filter(
     (role) => isNum(row[role.cur]) || isNum(row[role.nw]),
   );
@@ -316,7 +316,7 @@ function DetailRows({ row }) {
             <td style={{ ...DETAIL, textAlign: "center" }}>
               <Delta cur={cur} nw={nw} />
             </td>
-            {SHOW_VERDICT ? <td style={DETAIL} /> : null}
+            {showVerdict ? <td style={DETAIL} /> : null}
           </tr>
         );
       })}
@@ -325,7 +325,7 @@ function DetailRows({ row }) {
         <tr>
           <td style={{ ...DETAIL, ...accent }} />
           <td
-            colSpan={COMPARE_COLS - 1}
+            colSpan={compareCols(showVerdict) - 1}
             style={{
               ...DETAIL,
               paddingTop: 2,
@@ -346,7 +346,7 @@ function DetailRows({ row }) {
   );
 }
 
-function Table({ verdicts }) {
+function Table({ verdicts, showVerdict }) {
   const [open, setOpen] = useState({});
   const toggle = (key) => setOpen((o) => ({ ...o, [key]: !o[key] }));
 
@@ -415,12 +415,12 @@ function Table({ verdicts }) {
                 ...TH,
                 width: 90,
                 textAlign: "center",
-                ...(SHOW_VERDICT ? {} : { borderTopRightRadius: 6 }),
+                ...(showVerdict ? {} : { borderTopRightRadius: 6 }),
               }}
             >
               Change
             </th>
-            {SHOW_VERDICT ? (
+            {showVerdict ? (
               <th
                 style={{
                   ...TH,
@@ -440,7 +440,7 @@ function Table({ verdicts }) {
               {b.section ? (
                 <tr>
                   <td
-                    colSpan={COMPARE_COLS}
+                    colSpan={compareCols(showVerdict)}
                     style={{
                       padding: "7px 12px",
                       fontSize: 11,
@@ -500,7 +500,7 @@ function Table({ verdicts }) {
                       </td>
                       <td style={TD}>
                         {p.name}
-                        {!SHOW_VERDICT && v.flag ? (
+                        {!showVerdict && v.flag ? (
                           <span
                             title={v.flag}
                             style={{
@@ -565,7 +565,7 @@ function Table({ verdicts }) {
                       <td style={{ ...TD, textAlign: "center" }}>
                         <Delta cur={cur} nw={nw} />
                       </td>
-                      {SHOW_VERDICT ? (
+                      {showVerdict ? (
                         <td
                           style={{
                             ...TD,
@@ -580,7 +580,9 @@ function Table({ verdicts }) {
                         </td>
                       ) : null}
                     </tr>
-                    {isOpen && expandable ? <DetailRows row={v} /> : null}
+                    {isOpen && expandable ? (
+                      <DetailRows row={v} showVerdict={showVerdict} />
+                    ) : null}
                   </React.Fragment>
                 );
               })}
@@ -646,8 +648,10 @@ function Added({ added }) {
 // Swapnil asked for the verdict column to come out of Compare. Kept behind a
 // flag rather than deleted — the Lozenge, classify() and the summary chips all
 // still use the verdict, and turning this back on restores the column.
+// Hidden for users, but dev mode turns it back on — so it travels as a prop
+// rather than being read directly inside the table components.
 const SHOW_VERDICT = false;
-const COMPARE_COLS = SHOW_VERDICT ? 9 : 8;
+const compareCols = (showVerdict) => (showVerdict ? 9 : 8);
 
 const LOZ = {
   display: "inline-block",
@@ -1678,7 +1682,11 @@ function App() {
                       added={active.added}
                     />
                     <Chips verdicts={active.verdicts} />
-                    <Table key={active.phase} verdicts={active.verdicts} />
+                    <Table
+                      key={active.phase}
+                      verdicts={active.verdicts}
+                      showVerdict={SHOW_VERDICT || devMode}
+                    />
                     <p
                       style={{
                         margin: "8px 0 0",
