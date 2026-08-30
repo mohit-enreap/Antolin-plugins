@@ -114,6 +114,9 @@ const App = () => {
   const [reworkHours, setReworkHours] = useState(0);
   const [threeDModifications, setThreeDModifications] = useState(0);
   const [twoDModifications, setTwoDModifications] = useState(0);
+  // Which quotation version this form was built from, stamped into the saved
+  // snapshot so a later compare knows rather than trusting customfield_12738.
+  const [quotationVersion, setQuotationVersion] = useState(null);
   const [dataManagement, setDataManagement] = useState(0);
   const [product, setProduct] = useState("");
 
@@ -147,11 +150,11 @@ const App = () => {
       (acc, [key, activity]) =>
         acc +
         (!key.includes("ITERATIONS") &&
-          activity.checked &&
-          activity.standardLoop
-          ? activity.total == activity.standard   // New change in WO (after Quotation integration)
+        activity.checked &&
+        activity.standardLoop
+          ? activity.total == activity.standard // New change in WO (after Quotation integration)
             ? activity.total
-            : activity.standard   // till here
+            : activity.standard // till here
           : 0),
       0,
     );
@@ -293,6 +296,7 @@ const App = () => {
       setActivities(data.activity);
       console.log("producttttt", data.product);
       setProduct(data.product);
+      setQuotationVersion(data.quotationVersion || null);
     };
     await fetchMilestones();
     await fetchActivities();
@@ -443,6 +447,10 @@ const App = () => {
       _3DModification: threeDModifications,
       _2DModification: twoDModifications,
       dataManagement,
+      // Stamped so a later compare knows which version this phase was actually
+      // built from. customfield_12738 only records what the link says, and it
+      // can be edited independently of the hierarchy it describes.
+      quotationVersion,
     };
     console.log(JSON.stringify(data));
 
@@ -890,7 +898,8 @@ const App = () => {
         {/* Milestones Table */}
         {/* {phaseName.value != "Industrialization" &&
         !product.includes("- CAE")  */}
-        {phaseName.value != "Industrialization" && phaseName.value != "Offer" ? (
+        {phaseName.value != "Industrialization" &&
+        phaseName.value != "Offer" ? (
           <>
             <SectionHeader>Milestones to Generate</SectionHeader>
             {renderMilestoneTable(

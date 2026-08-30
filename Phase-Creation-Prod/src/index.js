@@ -1857,6 +1857,8 @@ function updateIndustrializationValuesFromQuotation(
 /// NEW
 async function computeConfigData(payload) {
   let { issue, phase, key, versionOverride } = payload;
+  // Function-scoped so the return can report which version was actually read.
+  let quotationVersion = null;
   console.log("fetching...");
   console.log("Key" + key, issue);
 
@@ -1884,7 +1886,7 @@ async function computeConfigData(payload) {
     const parts = quotationField.split(" ## ");
     // const quotationSummary = parts[0];
     const quotation = parts[1];
-    const quotationVersion = versionOverride || parts[2];
+    quotationVersion = versionOverride || parts[2];
 
     const productParts = issueDetail.fields["customfield_10074"].map(
       (element) => element.value,
@@ -2126,7 +2128,11 @@ async function computeConfigData(payload) {
     // console.log(key == "Milestone" ? data[key].milestones : updatedActivities)
     return key == "Milestone" && phase != "Industrialization"
       ? data[key].milestones
-      : { product: key, activity: updatedActivities };
+      : {
+          product: key,
+          activity: updatedActivities,
+          quotationVersion: quotationVersion || "Phase Configuration",
+        };
   }
   return {};
 }
@@ -5158,6 +5164,23 @@ async function runComparison(payload) {
     if (onlyPhaseKey && phase.key !== onlyPhaseKey) continue;
     const phaseName = phase.summary.replace(/^\d+\s*/, "").trim();
 
+    // What this phase was ACTUALLY built from, as opposed to what
+    // customfield_12738 claims — that field records what the link says and can
+    // be edited independently of the hierarchy. Absent on phases created before
+    // the stamp existed, which is every project today.
+    let builtFromStamp = null;
+    try {
+      const snapB64 = await storage.get(`${projectKey}_${phaseName}`);
+      if (snapB64) {
+        builtFromStamp =
+          JSON.parse(
+            pako.inflate(base64ToUint8Array(snapB64), { to: "string" }),
+          ).quotationVersion ?? null;
+      }
+    } catch (e) {
+      builtFromStamp = null;
+    }
+
     // The phase's own Standard Hrs TOT, so Compare shows the number the Gantt
     // shows rather than a sum that rounds differently.
     const phRes = await api
@@ -5381,6 +5404,7 @@ async function runComparison(payload) {
       phase: phase.summary,
       phaseKey: phase.key,
       phaseTotal,
+      builtFromStamp,
       verdicts,
       added,
       cooked,
@@ -5853,6 +5877,10 @@ resolver.define("dumpStorage", async ({ payload }) => {
       const acts = json.activities || {};
       return {
         phaseName: json.phaseName?.value ?? null,
+        // The version this phase was built from. Absent on phases created
+        // before the stamp existed; "Phase Configuration" when no quotation
+        // was linked.
+        quotationVersion: json.quotationVersion ?? null,
         totalHours: json.totalHours ?? null,
         _3DModification: json._3DModification ?? null,
         _2DModification: json._2DModification ?? null,
@@ -6359,6 +6387,10 @@ export async function applyWritesConsumer(event, context) {
   const payload = event?.call?.payload ?? event;
   const projectKey = payload?.issue?.key;
   const phaseKey = payload?.phaseKey;
+  // The version the plan was built against. It travels in the queued payload so
+  // the write always uses the same one the plan did, and patchPhaseSnapshot
+  // restamps the phase with it.
+  const version = payload?.version || null;
   let phaseLabel = null;
   let phaseRows = [];
   let phaseCooked = null;
@@ -6700,6 +6732,7 @@ export async function applyWritesConsumer(event, context) {
           replacedSummaries,
           closedEwRwSummaries,
           reopenedSummaries,
+          version,
         )
       : { ok: false, error: "NO_COOK" };
   } catch (e) {
@@ -7018,6 +7051,7 @@ async function patchPhaseSnapshot(
   replacedSummaries,
   closedEwRwSummaries,
   reopenedSummaries,
+  version,
 ) {
   const snapKey = `${projectKey}_${phaseName}`;
   const derKey = `${projectKey}_Industrialization_${phaseName}`;
@@ -7175,6 +7209,10 @@ async function patchPhaseSnapshot(
     dataManagement: snap.dataManagement,
   };
   Object.assign(snap, head);
+  // The hours in this snapshot are now the target version's, so the stamp moves
+  // with them. It means "last overwritten to", not "identical to" — residual
+  // differences from skipped rows still show as verdicts on the next compare.
+  if (version) snap.quotationVersion = version;
   const derived = {
     _3DModification: head._3DModification,
     _2DModification: head._2DModification,
