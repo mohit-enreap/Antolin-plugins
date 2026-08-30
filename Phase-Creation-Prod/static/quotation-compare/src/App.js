@@ -646,7 +646,7 @@ function Added({ added }) {
 // Swapnil asked for the verdict column to come out of Compare. Kept behind a
 // flag rather than deleted — the Lozenge, classify() and the summary chips all
 // still use the verdict, and turning this back on restores the column.
-const SHOW_VERDICT = true;
+const SHOW_VERDICT = false;
 const COMPARE_COLS = SHOW_VERDICT ? 9 : 8;
 
 const LOZ = {
