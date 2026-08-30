@@ -5211,16 +5211,30 @@ async function runComparison(payload) {
     // be edited independently of the hierarchy. Absent on phases created before
     // the stamp existed, which is every project today.
     let builtFromStamp = null;
+    // Which activities Create Phase actually built. Anything in the hierarchy
+    // that is not in here was made by hand, and the quotation cannot have
+    // dropped something it never contained.
+    let snapshotKeys = null;
     try {
       const snapB64 = await storage.get(`${projectKey}_${phaseName}`);
       if (snapB64) {
-        builtFromStamp =
-          JSON.parse(
-            pako.inflate(base64ToUint8Array(snapB64), { to: "string" }),
-          ).quotationVersion ?? null;
+        const snap = JSON.parse(
+          pako.inflate(base64ToUint8Array(snapB64), { to: "string" }),
+        );
+        builtFromStamp = snap.quotationVersion ?? null;
+        snapshotKeys = new Set(
+          (snap.activities || []).map((a) =>
+            String(a.key || "")
+              .split("|")
+              .map((p) => p.trim())
+              .join(" | ")
+              .toLowerCase(),
+          ),
+        );
       }
     } catch (e) {
       builtFromStamp = null;
+      snapshotKeys = null;
     }
 
     // The phase's own Standard Hrs TOT, so Compare shows the number the Gantt
@@ -5309,15 +5323,17 @@ async function runComparison(payload) {
       const cur = round1(ag.currentStd);
 
       if (!hit) {
-        // With a linked quotation the cook's activity list IS the quotation's
-        // activity list, so absence means the activity was dropped — a real
-        // de-scope, and the ordinary REMOVE rules apply. Without one, the
-        // static catalog may simply have been edited or the name may not
-        // normalise, so ORPHAN stays safe and does nothing.
+        // Two different things look the same here: an activity the quotation
+        // dropped, and a group somebody added by hand. The snapshot separates
+        // them — it lists what Create Phase built, so a group that is in it and
+        // not in the cook is a real de-scope, and one that was never in it was
+        // never part of any quotation. Swapnil: leave those alone.
+        const wasPlanned = snapshotKeys ? snapshotKeys.has(key) : false;
+        const dropped = Boolean(version) && wasPlanned;
         verdicts.push({
           ...ag,
-          newStd: version ? 0 : null,
-          verdict: version
+          newStd: dropped ? 0 : null,
+          verdict: dropped
             ? "REMOVE (dropped from the quotation)"
             : "ORPHAN (no cooked match)",
         });
@@ -6838,7 +6854,17 @@ export async function applyWritesConsumer(event, context) {
 
   const rollups = [];
   let projectDelta = 0;
-  const snapTotal = snapshot?.headAfter?.totalHours;
+  // The snapshot only holds what Create Phase built. A group added by hand in
+  // Jira is not in it, so writing its total straight to the phase would wipe
+  // that group's hours from the phase and the project. Orphan rows are exactly
+  // those groups, so their current hours are added back.
+  const orphanHours = (phaseRows || [])
+    .filter((r) => String(r.verdict || "").startsWith("ORPHAN"))
+    .reduce((t, r) => t + (Number(r.before?.total) || 0), 0);
+  const snapTotal =
+    snapshot?.headAfter?.totalHours != null
+      ? snapshot.headAfter.totalHours + orphanHours
+      : snapshot?.headAfter?.totalHours;
   if (isFinite(snapTotal)) {
     // Old code's formula, verbatim.
     rollups.push(await setPhaseTotal(phaseKey, Number(snapTotal.toFixed(1))));

@@ -650,7 +650,7 @@ function Added({ added }) {
 // still use the verdict, and turning this back on restores the column.
 // Hidden for users, but dev mode turns it back on — so it travels as a prop
 // rather than being read directly inside the table components.
-const SHOW_VERDICT = false;
+const SHOW_VERDICT = true;
 const compareCols = (showVerdict) => (showVerdict ? 9 : 8);
 
 const LOZ = {
