@@ -1129,12 +1129,8 @@ function App() {
         });
         console.log("[ver]", vi);
         setVersionInfo(vi);
-        if (vi?.linked && vi.closed?.length) {
-          // Newest closed version. builtFrom is not excluded — a project built
-          // from Phase Configuration and linked afterwards must still be able
-          // to compare against the version the link names.
-          setTargetVersion(vi.closed[vi.closed.length - 1]);
-        }
+        // No default. Choosing a version silently means Compare runs against
+        // something the user never picked.
       } catch (e) {
         setError("Could not read the project context. Reload the page.");
       }
@@ -1405,16 +1401,28 @@ function App() {
                 className="cq-sel"
                 onClick={bumpVersionClicks}
                 value={targetVersion}
-                disabled={!versionInfo?.linked}
+                disabled={!versionInfo || !versionInfo.linked}
                 onChange={(e) => setTargetVersion(e.target.value)}
               >
-                {versionInfo?.linked ? (
-                  versionInfo.closed.map((v) => (
-                    <option key={v} value={v}>
-                      {v}
-                      {v === versionInfo.builtFrom ? "  (built from this)" : ""}
-                    </option>
-                  ))
+                {/* Three states, not two: null means the version list has not
+                    come back yet, and showing "Phase Configuration" during that
+                    window tells the user something false. */}
+                {!versionInfo ? (
+                  <option value="">Loading…</option>
+                ) : versionInfo.linked && versionInfo.closed?.length ? (
+                  <>
+                    <option value="">Select a version…</option>
+                    {versionInfo.closed.map((v) => (
+                      <option key={v} value={v}>
+                        {v}
+                        {v === versionInfo.builtFrom
+                          ? "  (built from this)"
+                          : ""}
+                      </option>
+                    ))}
+                  </>
+                ) : versionInfo.linked ? (
+                  <option value="">No closed versions</option>
                 ) : (
                   <option value="">Phase Configuration</option>
                 )}
@@ -1432,8 +1440,21 @@ function App() {
                 </span>
               ) : null}
             </div>
-            <button className="cq-btn" onClick={run} disabled={busy || !issue}>
-              {busy && mode !== "plan" ? "Comparing…" : "Compare"}
+            <button
+              className="cq-btn"
+              onClick={run}
+              disabled={
+                busy ||
+                !issue ||
+                !versionInfo ||
+                (versionInfo.linked && !targetVersion)
+              }
+            >
+              {busy && mode !== "plan"
+                ? "Comparing…"
+                : !versionInfo
+                  ? "Loading…"
+                  : "Compare"}
             </button>
             {/* Diagnostics. They print to the browser console and mean nothing
                 to a normal user, so they sit behind the fifteen-click unlock
@@ -1508,7 +1529,13 @@ function App() {
             <button
               className="cq-btn"
               onClick={overwrite}
-              disabled={busy || !issue || !phases[tab]?.phaseKey}
+              disabled={
+                busy ||
+                !issue ||
+                !phases[tab]?.phaseKey ||
+                !versionInfo ||
+                (versionInfo.linked && !targetVersion)
+              }
               style={{ background: T.muted }}
               title="Apply the plan for the phase you are looking at."
             >
