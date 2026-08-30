@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { invoke, view } from "@forge/bridge";
 
 /* ------------------------------------------------------------------ *
@@ -1096,6 +1096,28 @@ function App() {
   // case the compare runs against the static Phase Configuration catalog.
   const [versionInfo, setVersionInfo] = useState(null);
   const [targetVersion, setTargetVersion] = useState("");
+  // Shown briefly after an armed overwrite, before the panel closes.
+  const [done, setDone] = useState(null);
+  // Ten clicks on the version box inside ten seconds unlocks comparing a
+  // version against itself, so a matched version can be checked to really
+  // produce nothing. Resets on reload, so it cannot be left on by accident.
+  const [devMode, setDevMode] = useState(false);
+  const versionClicks = useRef([]);
+
+  const bumpVersionClicks = () => {
+    if (devMode) return;
+    const now = Date.now();
+    versionClicks.current = [...versionClicks.current, now].filter(
+      (t) => now - t < 10000,
+    );
+    if (versionClicks.current.length >= 15) {
+      setDevMode(true);
+      versionClicks.current = [];
+      window.alert(
+        "Developer mode on. The diagnostic buttons are visible, and a version can now be compared against itself instead of reporting that nothing has changed.",
+      );
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -1128,6 +1150,7 @@ function App() {
       const res = await invoke("compareQuotation", {
         issue,
         version: targetVersion,
+        force: devMode,
       });
       if (!res || res.ok !== true) {
         setError(
@@ -1174,6 +1197,7 @@ function App() {
     // phase per click, so the button can never touch a tab you are not looking at.
     const target = phases[tab];
     const phaseKey = target?.phaseKey;
+    const phaseLabel = target?.phase || "The phase";
     if (!phaseKey) {
       setError("Run Compare or Plan first, then pick a phase.");
       return;
@@ -1203,6 +1227,21 @@ function App() {
         const now = await invoke("getLastOverwrite", { issue, phaseKey });
         if (now?.record?.at && now.record.at !== prevAt) {
           console.log("[write] receipt:", now.record);
+          // A phase that has never been through Create Phase has no snapshot,
+          // so rule 2 could not create anything. Say so rather than closing as
+          // if it worked, but still close — the numbers on screen are stale
+          // either way.
+          if (now.record.queuedCreate?.status === "NO_SNAPSHOT") {
+            setDone(null);
+            setError(now.record.queuedCreate.message);
+            setTimeout(close, 5000);
+          } else if (now.record.dryRun === false) {
+            setError(null);
+            setDone(
+              `${phaseLabel} overwritten. Closing — the new activities are still being created.`,
+            );
+            setTimeout(close, 2500);
+          }
           return;
         }
       }
@@ -1317,7 +1356,9 @@ function App() {
         @media (prefers-reduced-motion: reduce) { .cq-caret { transition:none; } }
       `}</style>
 
-      <div style={{ maxWidth: 1080, margin: "0 auto" }}>
+      {/* Was capped at 1080 when the table had five columns. It now has eight,
+          and the modal is already viewportSize: max, so use the width. */}
+      <div style={{ maxWidth: 1600, margin: "0 auto", padding: "0 16px" }}>
         <h1 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
           Compare quotation
         </h1>
@@ -1362,6 +1403,7 @@ function App() {
               <select
                 id="rev"
                 className="cq-sel"
+                onClick={bumpVersionClicks}
                 value={targetVersion}
                 disabled={!versionInfo?.linked}
                 onChange={(e) => setTargetVersion(e.target.value)}
@@ -1377,64 +1419,92 @@ function App() {
                   <option value="">Phase Configuration</option>
                 )}
               </select>
+              {devMode ? (
+                <span
+                  style={{
+                    marginLeft: 8,
+                    fontSize: 11,
+                    color: T.red,
+                    fontWeight: 700,
+                  }}
+                >
+                  DEV
+                </span>
+              ) : null}
             </div>
             <button className="cq-btn" onClick={run} disabled={busy || !issue}>
               {busy && mode !== "plan" ? "Comparing…" : "Compare"}
             </button>
-            <button
-              className="cq-btn"
-              onClick={dump}
-              disabled={!issue}
-              style={{ background: T.muted }}
-              title="Print stored Create Phase data to the browser console"
-            >
-              Storage
-            </button>
-            <button
-              className="cq-btn"
-              onClick={quot}
-              disabled={!issue || !versionInfo?.linked}
-              style={{ background: T.muted }}
-              title="Print the quotation blob and what differs against the selected version"
-            >
-              Quotation
-            </button>
-            <button
-              className="cq-btn"
-              onClick={rawJson}
-              disabled={!issue || !versionInfo?.linked}
-              style={{ background: T.muted }}
-              title="Print both raw quotation blobs and the catalogs, for checking"
-            >
-              Raw JSON
-            </button>
-            <button
-              className="cq-btn"
-              onClick={cook}
-              disabled={!issue || !phases[tab]?.phase}
-              style={{ background: T.muted }}
-              title="Print the cooked hours for this phase, and for the selected version"
-            >
-              Cook
-            </button>
-            <button
-              className="cq-btn"
-              onClick={workflow}
-              disabled={!issue || !phases[tab]?.phaseKey}
-              style={{ background: T.muted }}
-              title="Print the available transitions per issue type and status"
-            >
-              Workflow
-            </button>
-            <button
-              className="cq-btn"
-              onClick={plan}
-              disabled={busy || !issue}
-              style={{ background: T.muted }}
-              title="Dry run — show what would be written. Nothing is changed."
-            >
-              {busy && mode === "plan" ? "Planning…" : "Plan"}
-            </button>
+            {/* Diagnostics. They print to the browser console and mean nothing
+                to a normal user, so they sit behind the fifteen-click unlock
+                rather than being removed — reaching them should not need a
+                deploy. */}
+            {devMode ? (
+              <button
+                className="cq-btn"
+                onClick={dump}
+                disabled={!issue}
+                style={{ background: T.muted }}
+                title="Print stored Create Phase data to the browser console"
+              >
+                Storage
+              </button>
+            ) : null}
+            {devMode ? (
+              <button
+                className="cq-btn"
+                onClick={quot}
+                disabled={!issue || !versionInfo?.linked}
+                style={{ background: T.muted }}
+                title="Print the quotation blob and what differs against the selected version"
+              >
+                Quotation
+              </button>
+            ) : null}
+            {devMode ? (
+              <button
+                className="cq-btn"
+                onClick={rawJson}
+                disabled={!issue || !versionInfo?.linked}
+                style={{ background: T.muted }}
+                title="Print both raw quotation blobs and the catalogs, for checking"
+              >
+                Raw JSON
+              </button>
+            ) : null}
+            {devMode ? (
+              <button
+                className="cq-btn"
+                onClick={cook}
+                disabled={!issue || !phases[tab]?.phase}
+                style={{ background: T.muted }}
+                title="Print the cooked hours for this phase, and for the selected version"
+              >
+                Cook
+              </button>
+            ) : null}
+            {devMode ? (
+              <button
+                className="cq-btn"
+                onClick={workflow}
+                disabled={!issue || !phases[tab]?.phaseKey}
+                style={{ background: T.muted }}
+                title="Print the available transitions per issue type and status"
+              >
+                Workflow
+              </button>
+            ) : null}
+            {devMode ? (
+              <button
+                className="cq-btn"
+                onClick={plan}
+                disabled={busy || !issue}
+                style={{ background: T.muted }}
+                title="Dry run — show what would be written. Nothing is changed."
+              >
+                {busy && mode === "plan" ? "Planning…" : "Plan"}
+              </button>
+            ) : null}
             <button
               className="cq-btn"
               onClick={overwrite}
@@ -1480,7 +1550,39 @@ function App() {
           </div>
         ) : null}
 
-        {result ? (
+        {done ? (
+          <div
+            style={{
+              marginTop: 16,
+              padding: "10px 14px",
+              fontSize: 13,
+              color: "#216E4E",
+              background: "#DCFFF1",
+              border: "1px solid #7EE2B8",
+              borderRadius: 6,
+            }}
+          >
+            {done}
+          </div>
+        ) : null}
+
+        {result?.sameVersion ? (
+          <div
+            style={{
+              marginTop: 22,
+              padding: "12px 16px",
+              fontSize: 13,
+              color: "#974F0C",
+              background: "#FFF7D6",
+              border: "1px solid #F5CD47",
+              borderRadius: 6,
+            }}
+          >
+            This project is already built from{" "}
+            <strong>{result.sameVersion}</strong> on every phase, so there is
+            nothing to compare. Pick a different version.
+          </div>
+        ) : result ? (
           <div style={{ marginTop: 22 }}>
             <p style={{ margin: "0 0 12px", fontSize: 13, color: T.body }}>
               {showPlan ? "Plan for " : "Comparing "}

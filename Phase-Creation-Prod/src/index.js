@@ -5158,6 +5158,48 @@ async function runComparison(payload) {
   );
 
   const phases = await fetchWbsChildren(projectKey);
+
+  // If every phase was already built from — or overwritten to — the version
+  // being compared against, there is nothing to find. Checked before the cook
+  // rather than after, so it costs three storage reads instead of a full
+  // comparison. Requires every phase to carry a stamp: a phase created before
+  // stamping, or one built from a different version, falls through and compares
+  // normally.
+  // payload.force is the developer unlock — ten clicks on the version box —
+  // so a version can be compared against itself.
+  if (version && !payload?.force) {
+    const stamps = [];
+    for (const phase of phases) {
+      if (onlyPhaseKey && phase.key !== onlyPhaseKey) continue;
+      const pn = phase.summary.replace(/^\d+\s*/, "").trim();
+      try {
+        const b64 = await storage.get(`${projectKey}_${pn}`);
+        stamps.push(
+          b64
+            ? (JSON.parse(
+                pako.inflate(base64ToUint8Array(b64), { to: "string" }),
+              ).quotationVersion ?? null)
+            : null,
+        );
+      } catch (e) {
+        stamps.push(null);
+      }
+    }
+    if (stamps.length && stamps.every((s) => s === version)) {
+      console.log(
+        `[compare] ${projectKey} is already ${version} on every phase — nothing to compare`,
+      );
+      return {
+        ok: true,
+        projectKey,
+        currentProduct: currentProductKey,
+        newProduct: version,
+        sameVersion: version,
+        result: [],
+      };
+    }
+  }
+
   const result = [];
 
   for (const phase of phases) {
@@ -6344,7 +6386,7 @@ resolver.define("applyPlan", async ({ payload }) => {
 //   - every attempt is returned in a receipt with before, after and status —
 //     the only record of what a write replaced
 
-const DRY_RUN = true;
+const DRY_RUN = false;
 
 const WRITE_FIELDS = [
   { k: "total", cf: "customfield_10061" },
@@ -6748,7 +6790,21 @@ export async function applyWritesConsumer(event, context) {
   // touches every group in the phase.
   let queuedCreate = null;
   const adds = snapshot?.addedActivities || [];
-  if (adds.length && snapshot?.base64) {
+  // Rule 2 works by ticking activities in the phase's stored snapshot and
+  // handing that snapshot to create-activity. A phase that has never been
+  // through Create Phase has no snapshot, so every cooked activity reads as an
+  // Add and none of them can be created. Say so rather than doing nothing.
+  if (snapshot?.error === "NO_SNAPSHOT") {
+    queuedCreate = {
+      status: "NO_SNAPSHOT",
+      message:
+        "This phase has never been created. Run Create Phase on it first, then overwrite.",
+      key: snapshot.key,
+    };
+    console.warn(
+      `[add] ${snapshot.key} has no snapshot — nothing can be added`,
+    );
+  } else if (adds.length && snapshot?.base64) {
     if (DRY_RUN) {
       console.log(
         `[add] DRY RUN would queue create-activity for ${adds.length}:`,
