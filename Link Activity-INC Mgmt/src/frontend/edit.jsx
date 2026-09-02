@@ -115,30 +115,61 @@ const Edit = () => {
           ? "Extra Work"
           : "Re-Work";
 
-        // --- JQL LOGIC FOR INITIALIZE (match by Project KEY, not name) ---
-        // Match activities by their "Project Key" (customfield_10078), which holds
-        // the parent project's key (e.g. "CTEST-716"). This is an exact key match,
-        // so it avoids the hyphen-vs-space ambiguity of the display name
-        // ("Sagar Test-1" vs "Sagar Test 1") that caused empty dropdowns.
         const projectPrefix = getProjectPrefix(projectKey);
 
-        const linkClause = activityKey
-          ? `AND (issueLinkType != "Incident - Activity" OR key = "${activityKey}")`
-          : `AND issueLinkType != "Incident - Activity"`;
+        // CHANGE 4: The saved activityKey is often EMPTY on older incidents
+        // (e.g. INC-1241), so derive the REAL linked activity from THIS
+        // incident's own links instead of trusting the saved value.
+        let effectiveActivityKey = activityKey || "";
+        const hostIncidentKey = contextData.extension?.issue?.key;
+        if (hostIncidentKey) {
+          try {
+            const res = await invoke("getIssueByKey", {
+              issueKey: hostIncidentKey,
+            });
+            const links = res?.fields?.issuelinks || [];
+            const incidentActivityLink = links.find(
+              (l) => l.type?.name === "Incident - Activity",
+            );
+            const linkedActivity =
+              incidentActivityLink?.outwardIssue ||
+              incidentActivityLink?.inwardIssue;
+            if (linkedActivity?.key) {
+              effectiveActivityKey = linkedActivity.key;
+            }
+          } catch (e) {
+            console.error("Failed to read incident links:", e);
+          }
+        }
 
-        const activityJQL = `"type" = Activity AND "Project Key" ~ "${projectKey}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ${linkClause} ORDER BY summary ASC`;
+        // NOTE: "issueLinkType" is a ScriptRunner-only JQL function and behaves
+        // unreliably through the standard Jira search API (worked in CTEST,
+        // failed in CWO). We fetch matching activities WITHOUT that clause and
+        // filter "already linked" ones out in code using issuelinks.
+        const activityJQL = `"type" = Activity AND "Project Key" ~ "${projectKey}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
         const activityIssues = await fetchIssuesByJQL(activityJQL);
-        // ----------------------------------------------------------------
 
-        const activityOptions = activityIssues.map((issue) => ({
-          label: `${issue.fields.customfield_10970} | ${issue.fields.summary}`,
-          value: issue.key,
-        }));
+        // Keep an activity if it is NOT linked to any incident, OR if it is the
+        // activity linked to THIS incident (effectiveActivityKey).
+        const isLinkedToIncident = (issue) =>
+          (issue.fields.issuelinks || []).some(
+            (l) => l.type?.name === "Incident - Activity",
+          );
+
+        const activityOptions = activityIssues
+          .filter(
+            (issue) =>
+              !isLinkedToIncident(issue) || issue.key === effectiveActivityKey,
+          )
+          .map((issue) => ({
+            label: `${issue.fields.customfield_10970} | ${issue.fields.summary}`,
+            value: issue.key,
+          }));
         setSelectActivityOptions(activityOptions);
 
-        if (activityKey) {
+        if (effectiveActivityKey) {
           const matched = activityOptions.find(
-            (opt) => opt.value === activityKey,
+            (opt) => opt.value === effectiveActivityKey,
           );
           if (matched) {
             setSelectedActivity(matched);
@@ -168,18 +199,26 @@ const Edit = () => {
         const projectPrefix = getProjectPrefix(selectedProject.key);
 
         const currentKey = selectedActivity?.value || "";
-        const linkClause = currentKey
-          ? `AND (issueLinkType != "Incident - Activity" OR key = "${currentKey}")`
-          : `AND issueLinkType != "Incident - Activity"`;
 
-        const activityJQL = `"type" = Activity AND "Project Key" ~ "${selectedProject.key}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ${linkClause} ORDER BY summary ASC`;
+        // See note in initialize: issueLinkType is unreliable via the standard
+        // API, so fetch without it and filter already-linked activities in code.
+        const activityJQL = `"type" = Activity AND "Project Key" ~ "${selectedProject.key}" AND summary ~ "${keyword}" AND Project = ${projectPrefix} ORDER BY summary ASC`;
         const activityIssues = await fetchIssuesByJQL(activityJQL);
         // ----------------------------------------------------------------
 
-        const activityOptions = activityIssues.map((issue) => ({
-          label: `${issue.fields.customfield_10970} | ${issue.fields.summary}`,
-          value: issue.key,
-        }));
+        const isLinkedToIncident = (issue) =>
+          (issue.fields.issuelinks || []).some(
+            (l) => l.type?.name === "Incident - Activity",
+          );
+
+        const activityOptions = activityIssues
+          .filter(
+            (issue) => !isLinkedToIncident(issue) || issue.key === currentKey,
+          )
+          .map((issue) => ({
+            label: `${issue.fields.customfield_10970} | ${issue.fields.summary}`,
+            value: issue.key,
+          }));
         setSelectActivityOptions(activityOptions);
         setIsActivityLoading(false); // Done
       } else {

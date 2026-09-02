@@ -72,7 +72,7 @@ resolver.define("getIssuesByJQL", async ({ payload }) => {
         },
         body: JSON.stringify({
           jql: jql,
-          fields: ["summary", "customfield_10970"],
+          fields: ["summary", "customfield_10970", "issuelinks"],
           maxResults: maxResults,
         }),
       });
@@ -151,7 +151,7 @@ resolver.define("getIssueByKey", async ({ payload }) => {
     const response = await api
       .asApp()
       .requestJira(
-        route`/rest/api/3/issue/${issueKey}?fields=summary,customfield_10039,customfield_10078`,
+        route`/rest/api/3/issue/${issueKey}?fields=summary,customfield_10039,customfield_10078,issuelinks`,
       );
     if (!response.ok) {
       return { error: `Failed to fetch issue. Status: ${response.status}` };
