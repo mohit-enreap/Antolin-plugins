@@ -1856,7 +1856,7 @@ function updateIndustrializationValuesFromQuotation(
 
 /// NEW
 async function computeConfigData(payload) {
-  let { issue, phase, key, versionOverride } = payload;
+  let { issue, phase, key, versionOverride, catalogOverride } = payload;
   // Function-scoped so the return can report which version was actually read.
   let quotationVersion = null;
   console.log("fetching...");
@@ -1872,7 +1872,10 @@ async function computeConfigData(payload) {
     // if(storedActivity) return storedActivity
     const issueDetail = await fetchIssue(issue.key);
     // console.log(issueDetail)
-    key = issueDetail.fields["customfield_10073"].value;
+    // The compare can ask for a different catalog entry — "{product} New" —
+    // so a Phase Configuration comparison has something to compare against
+    // rather than the entry the project was built from.
+    key = catalogOverride || issueDetail.fields["customfield_10073"].value;
     // let customer = issueDetail.fields["customfield_10041"]
     let customer = issueDetail.fields["customfield_10838"].value;
 
@@ -1880,8 +1883,11 @@ async function computeConfigData(payload) {
 
     let projectType = issueDetail.fields["customfield_10052"].value;
 
-    const hasQuotationReference =
-      issueDetail.fields["customfield_12059"]?.value ?? "No";
+    // A catalog comparison is a Phase Configuration comparison: plain 2D Drawing
+    // and Data Management, no Quot_WO_ overlay, no BTP quarter.
+    const hasQuotationReference = catalogOverride
+      ? "No"
+      : (issueDetail.fields["customfield_12059"]?.value ?? "No");
 
     const parts = quotationField.split(" ## ");
     // const quotationSummary = parts[0];
@@ -5043,12 +5049,13 @@ resolver.define("listQuotations", async () => {
 // computeConfigData is Sayan's getConfigData body: it routes the quotation
 // catalogs, noOfComponent, the Phases gate, Industrialization and CAE, and it
 // re-parses the blob per call so nothing is shared between phases.
-async function cookForPhase(projectKey, phaseName, version) {
+async function cookForPhase(projectKey, phaseName, version, catalogKey) {
   const res = await computeConfigData({
     issue: { key: projectKey },
     phase: phaseName,
     key: "Activity",
     versionOverride: version || null,
+    catalogOverride: catalogKey || null,
   });
   return res?.activity || null;
 }
@@ -5151,7 +5158,33 @@ async function runComparison(payload) {
   //            compare code, not a quotation difference.
   //   Only meaningful while the catalog has not been edited since Create Phase
   //   ran for this project — otherwise the difference is catalog drift, not a bug.
-  const COOK_KEY = version || currentProductKey;
+  // No version means Phase Configuration: cook the "{product} New" catalog
+  // entry rather than the one the project was built from, which would only ever
+  // return no change. Guarded here as well as in the UI — computeConfigData
+  // does data[key].activities with no null check, so a missing entry throws.
+  let catalogKey = null;
+  if (!version) {
+    const candidate = `${currentProductKey} New`;
+    try {
+      const cfg = JSON.parse(
+        pako.inflate(base64ToUint8Array(await storage.get(STORAGE_KEY)), {
+          to: "string",
+        }),
+      );
+      if (cfg?.[candidate]?.activities) catalogKey = candidate;
+    } catch (e) {
+      catalogKey = null;
+    }
+    if (!catalogKey) {
+      return {
+        ok: false,
+        error: "NO_CATALOG_REVISION",
+        message: `Phase Configuration has no "${candidate}" to compare against.`,
+        currentProduct: currentProductKey,
+      };
+    }
+  }
+  const COOK_KEY = version || catalogKey;
 
   console.log(
     `[compare] COOK project=${projectKey} product="${currentProductKey}" version="${version || "phase configuration"}" customer="${customer}" parts=${productParts.length}`,
@@ -5249,7 +5282,8 @@ async function runComparison(payload) {
     // Cook the selected version for this phase. computeConfigData re-parses the
     // blob on every call, so the deep copy the old fork needed is unnecessary:
     // processJsonWithPhase can only mutate that call's own data.
-    const cooked = (await cookForPhase(projectKey, phaseName, version)) || {};
+    const cooked =
+      (await cookForPhase(projectKey, phaseName, version, catalogKey)) || {};
     const cookDiag = null;
 
     // read live AGs for this phase (key, summary, status, current std)
@@ -5522,11 +5556,29 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
         : "CAD"
     : null;
 
+  // Does Phase Configuration hold a "{product} New" to compare against? The
+  // dropdown offers Phase Configuration only when it does — computeConfigData
+  // reads data[key].activities with no null check, so a missing entry throws.
+  let hasCatalogNew = false;
+  if (productKey) {
+    try {
+      const cfg = JSON.parse(
+        pako.inflate(base64ToUint8Array(await storage.get(STORAGE_KEY)), {
+          to: "string",
+        }),
+      );
+      hasCatalogNew = Boolean(cfg?.[`${productKey} New`]?.activities);
+    } catch (e) {
+      hasCatalogNew = false;
+    }
+  }
+
   if (!linked || !quotationKey) {
     return {
       ok: true,
       linked: false,
       versions: [],
+      hasCatalogNew,
       quotationKey,
       builtFrom,
       productKey,
@@ -5611,6 +5663,7 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
   return {
     ok: true,
     linked: true,
+    hasCatalogNew,
     probes,
     quotationKey,
     quotStatus,
@@ -5900,6 +5953,31 @@ resolver.define("dumpCook", async ({ payload }) => {
     targetTotal: target ? sum("newStd") : null,
     rows,
   };
+});
+
+// ─── PHASE LIST (read-only) ──────────────────────────────────────────────────
+// The tab strip used to come from the compare result, which was fine while one
+// call returned every phase. It no longer does: four phases exceed the
+// resolver's 25 second limit, so the compare runs one at a time — and a tab
+// strip built from a single-phase result could never reach the other tabs.
+// So the tabs get their own source, and the compare fills them in on demand.
+resolver.define("listPhases", async ({ payload }) => {
+  const projectKey = payload?.issue?.key;
+  if (!projectKey) return { ok: false, error: "NO_ISSUE" };
+  try {
+    const kids = await fetchWbsChildren(projectKey);
+    const phases = kids
+      .filter((k) => k.typeId === "10016")
+      .map((k) => ({ key: k.key, summary: k.summary }))
+      .sort((a, b) => String(a.summary).localeCompare(String(b.summary)));
+    console.log(
+      `[phases] ${projectKey}: ${phases.map((p) => p.summary).join(", ") || "none"}`,
+    );
+    return { ok: true, projectKey, phases };
+  } catch (e) {
+    console.error(`[phases] ${projectKey} failed: ${e?.message}`);
+    return { ok: false, error: "FETCH_FAILED", message: e?.message };
+  }
 });
 
 // Thin wrapper — the UI's Compare button. Behaviour is unchanged.

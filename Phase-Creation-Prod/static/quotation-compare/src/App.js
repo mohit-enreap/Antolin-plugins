@@ -1097,10 +1097,17 @@ function App() {
   const [mode, setMode] = useState(null); // "compare" | "plan"
   const [error, setError] = useState(null);
   const [tab, setTab] = useState(0);
+  // The compare runs one phase per call — four in one call exceeds the
+  // resolver's 25 second limit, which cannot be raised. So the tab strip is
+  // driven by this list rather than by whatever has been compared so far, and
+  // each phase's rows are fetched when its tab is opened.
+  const [phaseList, setPhaseList] = useState([]);
   // Step 2: the real version list. Empty when no quotation is linked, in which
   // case the compare runs against the static Phase Configuration catalog.
   const [versionInfo, setVersionInfo] = useState(null);
-  const [targetVersion, setTargetVersion] = useState("");
+  // "__none__" is unchosen; "" is Phase Configuration, which is now a real
+  // selection rather than the absence of one.
+  const [targetVersion, setTargetVersion] = useState("__none__");
   // Shown briefly after an armed overwrite, before the panel closes.
   const [done, setDone] = useState(null);
   // Ten clicks on the version box inside ten seconds unlocks comparing a
@@ -1134,6 +1141,11 @@ function App() {
         });
         console.log("[ver]", vi);
         setVersionInfo(vi);
+
+        // The tabs, independent of what has been compared.
+        const pl = await invoke("listPhases", { issue: ctx.extension.issue });
+        console.log("[phases]", pl);
+        if (pl?.ok) setPhaseList(pl.phases || []);
         // No default. Choosing a version silently means Compare runs against
         // something the user never picked.
       } catch (e) {
@@ -1142,18 +1154,70 @@ function App() {
     })();
   }, []);
 
+  // Compare one phase. Called by run() for the active tab and by openTab when
+  // the user moves to another.
+  const compareOne = async (phaseKey) => {
+    const res = await invoke("compareQuotation", {
+      issue,
+      version: targetVersion === "__none__" ? "" : targetVersion,
+      force: devMode,
+      phaseKey: phaseKey || null,
+    });
+    return res;
+  };
+
+  const openTab = async (i) => {
+    setTab(i);
+    if (!data || !phaseList[i]) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await compareOne(phaseList[i].key);
+      if (res?.ok === true) setData(res);
+      else
+        setError(
+          (res && (res.message || res.reason)) || "Could not load that phase.",
+        );
+    } catch (e) {
+      console.error("[cmp] tab THREW", e?.name, e?.message);
+      setError(`Could not load that phase. ${e?.message || ""}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const run = async () => {
+    // Without a phase list there is no phaseKey to send, and runComparison then
+    // compares every phase — which is what exceeds the 25 second limit.
+    if (!phaseList.length) {
+      setError("Still loading the phases. Try again in a moment.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setData(null);
     setTab(0);
+    // The catch was replacing the real failure with one sentence, so a timeout,
+    // a resolver error and a dropped connection all looked identical. Everything
+    // it knows now goes to the console.
+    const t0 = Date.now();
+    const secs = () => ((Date.now() - t0) / 1000).toFixed(1);
     try {
+      console.log(
+        `[cmp] invoking compareQuotation  version="${targetVersion === "__none__" ? "" : targetVersion}"  force=${devMode}`,
+      );
+      // phaseList, not phases: `phases` is derived from the compare result and
+      // is empty before the first run, so it sent null and every phase was
+      // compared — which is the 25 second timeout.
       const res = await invoke("compareQuotation", {
         issue,
-        version: targetVersion,
+        version: targetVersion === "__none__" ? "" : targetVersion,
         force: devMode,
+        phaseKey: phaseList[tab]?.key || null,
       });
+      console.log(`[cmp] returned after ${secs()}s`, res);
       if (!res || res.ok !== true) {
+        console.warn(`[cmp] resolver reported a failure`, res);
         setError(
           (res && (res.message || res.reason)) ||
             "No newer quotation is available for this project.",
@@ -1163,7 +1227,22 @@ function App() {
         setMode("compare");
       }
     } catch (e) {
-      setError("The comparison could not be completed. Try again.");
+      // name and message are the useful part: a Forge timeout and a network
+      // drop throw different things, and the stack says where it gave up.
+      console.error(
+        `[cmp] THREW after ${secs()}s`,
+        "\n  name:",
+        e?.name,
+        "\n  message:",
+        e?.message,
+        "\n  status:",
+        e?.status ?? e?.statusCode,
+        "\n  error:",
+        e,
+      );
+      setError(
+        `The comparison could not be completed after ${secs()}s. ${e?.message || ""}`,
+      );
     } finally {
       setBusy(false);
     }
@@ -1175,7 +1254,10 @@ function App() {
     setPlanData(null);
     setTab(0);
     try {
-      const res = await invoke("applyPlan", { issue, version: targetVersion });
+      const res = await invoke("applyPlan", {
+        issue,
+        version: targetVersion === "__none__" ? "" : targetVersion,
+      });
       console.log("[plan] result:", res);
       if (!res || res.ok !== true) {
         setError(
@@ -1196,9 +1278,10 @@ function App() {
   const overwrite = async () => {
     // The active tab decides which phase is written
     // phase per click, so the button can never touch a tab you are not looking at.
-    const target = phases[tab];
-    const phaseKey = target?.phaseKey;
-    const phaseLabel = target?.phase || "The phase";
+    // phaseList, not phases: the compare result now holds only the phase that
+    // was compared, so phases[tab] is undefined on any tab but the first.
+    const phaseKey = phaseList[tab]?.key;
+    const phaseLabel = phaseList[tab]?.summary || "The phase";
     if (!phaseKey) {
       setError("Run Compare or Plan first, then pick a phase.");
       return;
@@ -1213,7 +1296,7 @@ function App() {
       const res = await invoke("applyWrites", {
         issue,
         phaseKey,
-        version: targetVersion,
+        version: targetVersion === "__none__" ? "" : targetVersion,
       });
       console.log("[write] queued:", res);
       if (!res || res.ok !== true) {
@@ -1265,7 +1348,7 @@ function App() {
   const quot = async () => {
     const res = await invoke("dumpQuotation", {
       issue,
-      version: targetVersion,
+      version: targetVersion === "__none__" ? "" : targetVersion,
     });
     console.log("[quot]", res);
   };
@@ -1276,7 +1359,7 @@ function App() {
   const rawJson = async () => {
     const res = await invoke("dumpQuotation", {
       issue,
-      version: targetVersion,
+      version: targetVersion === "__none__" ? "" : targetVersion,
       includeRaw: true,
     });
     const text = JSON.stringify(res, null, 1);
@@ -1288,13 +1371,13 @@ function App() {
   // The cook's own output for the phase tab you are on, so the numbers on
   // screen can be checked against what computeConfigData actually returned.
   const cook = async () => {
-    const label = phases[tab]?.phase || "";
+    const label = phaseList[tab]?.summary || "";
     // Tabs read "01 Proto"; the cook wants "Proto".
     const phase = label.replace(/^\d+\s*/, "").trim() || "Proto";
     const res = await invoke("dumpCook", {
       issue,
       phase,
-      version: targetVersion,
+      version: targetVersion === "__none__" ? "" : targetVersion,
     });
     console.log("[cook]", res);
   };
@@ -1302,7 +1385,7 @@ function App() {
   // Temporary, for the transition step: what can each issue type actually do
   // from each status it is in. Read-only.
   const workflow = async () => {
-    const phaseKey = phases[tab]?.phaseKey;
+    const phaseKey = phaseList[tab]?.key;
     const res = await invoke("dumpTransitions", { issue, phaseKey });
     console.log("[wf] transitions:", res);
   };
@@ -1321,7 +1404,11 @@ function App() {
   const showPlan = mode === "plan";
   const result = showPlan ? planData : data;
   const phases = (result && (showPlan ? result.phases : result.result)) || [];
-  const active = phases[tab];
+  // result.result now holds only the phase that was compared, so match it to
+  // the selected tab by key rather than by position.
+  const active = phaseList.length
+    ? phases.find((p) => p.phaseKey === phaseList[tab]?.key)
+    : phases[tab];
 
   return (
     <div
@@ -1406,30 +1493,34 @@ function App() {
                 className="cq-sel"
                 onClick={bumpVersionClicks}
                 value={targetVersion}
-                disabled={!versionInfo || !versionInfo.linked}
+                disabled={!versionInfo}
                 onChange={(e) => setTargetVersion(e.target.value)}
               >
                 {/* Three states, not two: null means the version list has not
                     come back yet, and showing "Phase Configuration" during that
                     window tells the user something false. */}
+                {/* "built from this" read customfield_12738, which records what
+                    the link says rather than what Create Phase used — a project
+                    built from Phase Configuration and linked afterwards was
+                    labelled wrongly. builtFromStamp is the truthful answer but
+                    only arrives after a compare, so the label is dropped. */}
                 {!versionInfo ? (
                   <option value="">Loading…</option>
-                ) : versionInfo.linked && versionInfo.closed?.length ? (
+                ) : !versionInfo.hasCatalogNew &&
+                  !(versionInfo.linked && versionInfo.closed?.length) ? (
+                  <option value="">Nothing to compare against</option>
+                ) : (
                   <>
-                    <option value="">Select a version…</option>
-                    {versionInfo.closed.map((v) => (
+                    <option value="__none__">Select a version…</option>
+                    {versionInfo.hasCatalogNew ? (
+                      <option value="">Phase Configuration</option>
+                    ) : null}
+                    {(versionInfo.closed || []).map((v) => (
                       <option key={v} value={v}>
                         {v}
-                        {v === versionInfo.builtFrom
-                          ? "  (built from this)"
-                          : ""}
                       </option>
                     ))}
                   </>
-                ) : versionInfo.linked ? (
-                  <option value="">No closed versions</option>
-                ) : (
-                  <option value="">Phase Configuration</option>
                 )}
               </select>
               {devMode ? (
@@ -1449,10 +1540,7 @@ function App() {
               className="cq-btn"
               onClick={run}
               disabled={
-                busy ||
-                !issue ||
-                !versionInfo ||
-                (versionInfo.linked && !targetVersion)
+                busy || !issue || !versionInfo || targetVersion === "__none__"
               }
             >
               {busy && mode !== "plan"
@@ -1502,7 +1590,7 @@ function App() {
               <button
                 className="cq-btn"
                 onClick={cook}
-                disabled={!issue || !phases[tab]?.phase}
+                disabled={!issue || !phaseList[tab]?.summary}
                 style={{ background: T.muted }}
                 title="Print the cooked hours for this phase, and for the selected version"
               >
@@ -1513,7 +1601,7 @@ function App() {
               <button
                 className="cq-btn"
                 onClick={workflow}
-                disabled={!issue || !phases[tab]?.phaseKey}
+                disabled={!issue || !phaseList[tab]?.key}
                 style={{ background: T.muted }}
                 title="Print the available transitions per issue type and status"
               >
@@ -1537,15 +1625,18 @@ function App() {
               disabled={
                 busy ||
                 !issue ||
-                !phases[tab]?.phaseKey ||
+                !phaseList[tab]?.key ||
                 !versionInfo ||
-                (versionInfo.linked && !targetVersion)
+                targetVersion === "__none__" ||
+                // Nothing has been compared for this phase yet, so there is no
+                // result on screen to overwrite against.
+                !active
               }
               style={{ background: T.muted }}
               title="Apply the plan for the phase you are looking at."
             >
-              {phases[tab]?.phase
-                ? `Overwrite ${phases[tab].phase}`
+              {phaseList[tab]?.summary
+                ? `Overwrite ${phaseList[tab].summary}`
                 : "Overwrite"}
             </button>
             <button
@@ -1562,7 +1653,8 @@ function App() {
             </button>
           </div>
           <p style={{ margin: "8px 0 0", fontSize: 12, color: T.faint }}>
-            Version selection arrives with the quotation system.
+            Compare shows what would change. Overwrite applies it to the phase
+            you are looking at.
           </p>
         </div>
 
@@ -1650,14 +1742,14 @@ function App() {
                 marginBottom: 16,
               }}
             >
-              {phases.map((p, i) => (
+              {(phaseList.length ? phaseList : phases).map((p, i) => (
                 <button
-                  key={p.phase}
+                  key={p.key || p.phase}
                   className="cq-tab"
                   data-on={i === tab}
-                  onClick={() => setTab(i)}
+                  onClick={() => openTab(i)}
                 >
-                  {p.phase}
+                  {p.summary || p.phase}
                 </button>
               ))}
             </div>
