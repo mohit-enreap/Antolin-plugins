@@ -1102,6 +1102,10 @@ function App() {
   // driven by this list rather than by whatever has been compared so far, and
   // each phase's rows are fetched when its tab is opened.
   const [phaseList, setPhaseList] = useState([]);
+  // Each phase's compare result, keyed by phase issue key. Switching tabs used
+  // to re-invoke every time — slow, and every extra call is another chance to
+  // get an HTML error page back instead of JSON.
+  const [byPhase, setByPhase] = useState({});
   // Step 2: the real version list. Empty when no quotation is linked, in which
   // case the compare runs against the static Phase Configuration catalog.
   const [versionInfo, setVersionInfo] = useState(null);
@@ -1169,15 +1173,27 @@ function App() {
   const openTab = async (i) => {
     setTab(i);
     if (!data || !phaseList[i]) return;
+    const pk = phaseList[i].key;
+
+    // Already fetched for this version — show it, no round trip.
+    if (byPhase[pk]) {
+      setError(null);
+      setData(byPhase[pk]);
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
-      const res = await compareOne(phaseList[i].key);
-      if (res?.ok === true) setData(res);
-      else
+      const res = await compareOne(pk);
+      if (res?.ok === true) {
+        setByPhase((m) => ({ ...m, [pk]: res }));
+        setData(res);
+      } else {
         setError(
           (res && (res.message || res.reason)) || "Could not load that phase.",
         );
+      }
     } catch (e) {
       console.error("[cmp] tab THREW", e?.name, e?.message);
       setError(`Could not load that phase. ${e?.message || ""}`);
@@ -1196,6 +1212,8 @@ function App() {
     setBusy(true);
     setError(null);
     setData(null);
+    // A new comparison invalidates every cached phase.
+    setByPhase({});
     setTab(0);
     // The catch was replacing the real failure with one sentence, so a timeout,
     // a resolver error and a dropped connection all looked identical. Everything
@@ -1223,6 +1241,8 @@ function App() {
             "No newer quotation is available for this project.",
         );
       } else {
+        const pk = phaseList[tab]?.key;
+        if (pk) setByPhase({ [pk]: res });
         setData(res);
         setMode("compare");
       }
@@ -1494,7 +1514,12 @@ function App() {
                 onClick={bumpVersionClicks}
                 value={targetVersion}
                 disabled={!versionInfo}
-                onChange={(e) => setTargetVersion(e.target.value)}
+                onChange={(e) => {
+                  setTargetVersion(e.target.value);
+                  // Cached phases belong to the previous version.
+                  setByPhase({});
+                  setData(null);
+                }}
               >
                 {/* Three states, not two: null means the version list has not
                     come back yet, and showing "Phase Configuration" during that
