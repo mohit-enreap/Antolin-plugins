@@ -1555,6 +1555,8 @@ function App() {
                     only arrives after a compare, so the label is dropped. */}
                 {!versionInfo ? (
                   <option value="">Loading…</option>
+                ) : versionInfo.mismatch ? (
+                  <option value="">Wrong quotation linked</option>
                 ) : !versionInfo.hasCatalogNew &&
                   !(versionInfo.linked && versionInfo.closed?.length) ? (
                   <option value="">Nothing to compare against</option>
@@ -1706,6 +1708,31 @@ function App() {
             you are looking at.
           </p>
         </div>
+
+        {/* A configuration problem rather than a run-time one, so it sits above
+            the error banner and stays visible regardless of what else happens. */}
+        {versionInfo?.mismatch ? (
+          <div
+            style={{
+              marginTop: 16,
+              padding: "10px 14px",
+              fontSize: 13,
+              color: "#AE2E24",
+              background: "#FFECEB",
+              border: "1px solid #F87168",
+              borderRadius: 6,
+            }}
+          >
+            This project is{" "}
+            <strong>{versionInfo.mismatch.projectProduct}</strong> for{" "}
+            <strong>{versionInfo.mismatch.projectCustomer}</strong>, but{" "}
+            {versionInfo.quotationKey} is{" "}
+            <strong>{versionInfo.mismatch.quotationProduct}</strong> for{" "}
+            <strong>{versionInfo.mismatch.quotationCustomer}</strong>. Check the
+            quotation link on the project — no quotation data can be read while
+            they differ.
+          </div>
+        ) : null}
 
         {error ? (
           <div

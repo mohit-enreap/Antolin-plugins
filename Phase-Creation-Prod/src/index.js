@@ -5134,7 +5134,7 @@ async function runComparison(payload) {
   const projRes = await api
     .asApp()
     .requestJira(
-      route`/rest/api/3/issue/${projectKey}?fields=customfield_10074,customfield_10838,customfield_10073`,
+      route`/rest/api/3/issue/${projectKey}?fields=customfield_10074,customfield_10838,customfield_10073,customfield_12059,customfield_12738`,
     );
   const projFields = (await projRes.json()).fields;
   const productParts = (projFields.customfield_10074 || []).map((e) => e.value);
@@ -5148,6 +5148,43 @@ async function runComparison(payload) {
       error: "NO_PRODUCT",
       message: "This project has no Product-BU set.",
     };
+  }
+
+  // The Quot_WO_ key is written from the QUOTATION issue's product and customer
+  // and read using the PROJECT's. If they differ the blob is never found and
+  // computeConfigData falls back to the static catalog without saying so —
+  // plausible numbers from the wrong source. The UI blocks this, but a stale
+  // frontend or a direct invoke would not, and buildPlan calls this function,
+  // so the overwrite path would inherit the hole.
+  if (version) {
+    const linked = (projFields.customfield_12059?.value ?? "No") === "Yes";
+    const qKey = String(projFields.customfield_12738 || "").split(" ## ")[1];
+    if (linked && qKey) {
+      const qres = await api
+        .asApp()
+        .requestJira(
+          route`/rest/api/3/issue/${qKey}?fields=customfield_10073,customfield_10838`,
+        );
+      if (qres.ok) {
+        const qf = (await qres.json()).fields || {};
+        const qProduct = qf.customfield_10073?.value ?? null;
+        const qCustomer = qf.customfield_10838?.value ?? null;
+        if (qProduct !== currentProductKey || qCustomer !== customer) {
+          console.error(
+            `[compare] MISMATCH ${projectKey} is ${currentProductKey}/${customer} but ${qKey} is ${qProduct}/${qCustomer}`,
+          );
+          return {
+            ok: false,
+            error: "QUOTATION_MISMATCH",
+            message: `This project is ${currentProductKey} for ${customer}, but ${qKey} is ${qProduct} for ${qCustomer}. No quotation data can be read while they differ.`,
+            projectProduct: currentProductKey,
+            quotationProduct: qProduct,
+            projectCustomer: customer,
+            quotationCustomer: qCustomer,
+          };
+        }
+      }
+    }
   }
 
   // SELF-TEST SWITCH.
@@ -5592,7 +5629,7 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
   const qres = await api
     .asApp()
     .requestJira(
-      route`/rest/api/3/issue/${quotationKey}?fields=customfield_12257,customfield_12060,status`,
+      route`/rest/api/3/issue/${quotationKey}?fields=customfield_12257,customfield_12060,status,customfield_10073,customfield_10838`,
     );
   if (!qres.ok) {
     return {
@@ -5614,6 +5651,29 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
   // current one rather than trusting the list alone.
   const current = qf["customfield_12060"] || null;
   const quotStatus = qf.status?.name || null;
+
+  // The Quot_WO_ key is written from the QUOTATION issue's product and customer
+  // and read using the PROJECT's. If they differ the blob can never be found and
+  // the cook falls back to the static catalog without saying so — the same
+  // silent failure in Create Phase as here.
+  const customerName = f["customfield_10838"]?.value ?? null;
+  const quotProduct = qf["customfield_10073"]?.value ?? null;
+  const quotCustomer = qf["customfield_10838"]?.value ?? null;
+  const mismatch =
+    quotProduct !== productKey || quotCustomer !== customerName
+      ? {
+          projectProduct: productKey,
+          quotationProduct: quotProduct,
+          projectCustomer: customerName,
+          quotationCustomer: quotCustomer,
+        }
+      : null;
+  if (mismatch) {
+    console.error(
+      `[ver] MISMATCH ${projectKey} is ${productKey}/${customerName} but ${quotationKey} is ${quotProduct}/${quotCustomer}`,
+    );
+  }
+
   if (current && !versions.includes(current)) versions.push(current);
   if (builtFrom && !versions.includes(builtFrom)) versions.push(builtFrom);
 
@@ -5640,7 +5700,6 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
   // so a miss here is the miss Create Phase is having — and it says so in the
   // browser console rather than needing forge logs.
   const baseKey = family === "CAD" ? productKey : productKey.split(" -")[0];
-  const customerName = f["customfield_10838"]?.value ?? null;
   const probes = [];
   for (const v of closed) {
     const k = `Quot_WO_${baseKey}_${customerName}_${quotationKey}_${family}_${v}`;
@@ -5664,6 +5723,7 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
     ok: true,
     linked: true,
     hasCatalogNew,
+    mismatch,
     probes,
     quotationKey,
     quotStatus,
