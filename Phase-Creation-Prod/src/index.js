@@ -5041,10 +5041,48 @@ resolver.define("listQuotations", async () => {
   return { keys };
 });
 
+// ITERATIONS|ITERATIONS is derived, not quoted. The blob stores it as zero and
+// Create Phase computes it in the browser — create-phase/App.js 200-215 — so
+// the cook returns 0 and the compare would call it a Remove on an activity that
+// has real hours in Jira, and delete the group on an armed run.
+// recomputeSnapshotHeader already applies this at line 7246; the comparison
+// needs the same arithmetic.
+function applyIterations(cooked) {
+  const itKey = Object.keys(cooked || {}).find((k) => k.includes("ITERATIONS"));
+  if (!itKey) return cooked;
+  const it = cooked[itKey] || {};
+  const pct = it.percentage || 0;
+  const loops = it.noOfLoops || 1;
+  if (!pct) return cooked;
+
+  // Same filter as the form: DE only, excluding ITERATIONS and TCL ACTIVITIES.
+  // checked and standardLoop are not on the cooked rows — the cook returns
+  // every activity in the blob — but an unticked activity has DE 0, so it
+  // contributes nothing either way.
+  const base = Object.entries(cooked).reduce(
+    (sum, [k, v]) =>
+      k.includes("ITERATIONS") || k.includes("TCL ACTIVITIES")
+        ? sum
+        : sum + (v?.DE || 0),
+    0,
+  );
+  const value = Number(((base * loops * pct) / 100).toFixed(2));
+  cooked[itKey] = {
+    ...it,
+    DE: value,
+    TDL: 0,
+    COO: 0,
+    standard: value,
+    total: value,
+  };
+  console.log(
+    `[cook] ${itKey}: ${base} DE x ${loops} loops x ${pct}% = ${value}`,
+  );
+  return cooked;
+}
+
 // The unrounded cook for one phase. runComparison rounds to one decimal for
 // display; the snapshot stores raw values, so Step 5 needs what it rounds away.
-// Sits here because it uses resolveNewRevisionKey above and cookActivitiesTemp
-// at 3517.
 // The unrounded cook for one phase, from the version the caller names.
 // computeConfigData is Sayan's getConfigData body: it routes the quotation
 // catalogs, noOfComponent, the Phases gate, Industrialization and CAE, and it
@@ -5057,7 +5095,7 @@ async function cookForPhase(projectKey, phaseName, version, catalogKey) {
     versionOverride: version || null,
     catalogOverride: catalogKey || null,
   });
-  return res?.activity || null;
+  return res?.activity ? applyIterations(res.activity) : null;
 }
 
 // A group with no standard hours is either an Extra Work / Re-Work group, or a
@@ -5169,7 +5207,15 @@ async function runComparison(payload) {
         const qf = (await qres.json()).fields || {};
         const qProduct = qf.customfield_10073?.value ?? null;
         const qCustomer = qf.customfield_10838?.value ?? null;
-        if (qProduct !== currentProductKey || qCustomer !== customer) {
+        // Base names only — one quotation covers CAD, CAE and PS.
+        const baseOf = (s) =>
+          String(s || "")
+            .split(" -")[0]
+            .trim();
+        if (
+          baseOf(qProduct) !== baseOf(currentProductKey) ||
+          qCustomer !== customer
+        ) {
           console.error(
             `[compare] MISMATCH ${projectKey} is ${currentProductKey}/${customer} but ${qKey} is ${qProduct}/${qCustomer}`,
           );
@@ -5265,6 +5311,10 @@ async function runComparison(payload) {
         currentProduct: currentProductKey,
         newProduct: version,
         sameVersion: version,
+        // Which phase this applies to. The compare is per phase now, so a
+        // result left in state while the next phase loads would otherwise be
+        // rendered against the new tab's name.
+        sameVersionPhaseKey: onlyPhaseKey,
         result: [],
       };
     }
@@ -5659,8 +5709,16 @@ resolver.define("listQuotationVersions", async ({ payload }) => {
   const customerName = f["customfield_10838"]?.value ?? null;
   const quotProduct = qf["customfield_10073"]?.value ?? null;
   const quotCustomer = qf["customfield_10838"]?.value ?? null;
+  // One quotation issue covers CAD, CAE and PS — the family lives in the key's
+  // own segment, not in the product name. The read side already strips the
+  // suffix via baseKey, so a "Headliner - CAE" project on a "Headliner"
+  // quotation is correct and must not be flagged.
+  const baseOf = (s) =>
+    String(s || "")
+      .split(" -")[0]
+      .trim();
   const mismatch =
-    quotProduct !== productKey || quotCustomer !== customerName
+    baseOf(quotProduct) !== baseOf(productKey) || quotCustomer !== customerName
       ? {
           projectProduct: productKey,
           quotationProduct: quotProduct,

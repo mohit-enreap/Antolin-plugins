@@ -1198,6 +1198,8 @@ function App() {
 
     setBusy(true);
     setError(null);
+    // Nothing from the previous phase should render against this tab.
+    setData(null);
     try {
       const res = await compareOne(pk);
       if (res?.ok === true) {
@@ -1766,23 +1768,7 @@ function App() {
           </div>
         ) : null}
 
-        {result?.sameVersion ? (
-          <div
-            style={{
-              marginTop: 22,
-              padding: "12px 16px",
-              fontSize: 13,
-              color: "#974F0C",
-              background: "#FFF7D6",
-              border: "1px solid #F5CD47",
-              borderRadius: 6,
-            }}
-          >
-            This project is already built from{" "}
-            <strong>{result.sameVersion}</strong> on every phase, so there is
-            nothing to compare. Pick a different version.
-          </div>
-        ) : result ? (
+        {result ? (
           <div style={{ marginTop: 22 }}>
             <p style={{ margin: "0 0 12px", fontSize: 13, color: T.body }}>
               {showPlan ? "Plan for " : "Comparing "}
@@ -1841,7 +1827,26 @@ function App() {
               </div>
             ) : null}
 
-            {active && !showPlan ? (
+            {result.sameVersion &&
+            result.sameVersionPhaseKey === phaseList[tab]?.key ? (
+              <div
+                style={{
+                  marginTop: 22,
+                  padding: "12px 16px",
+                  fontSize: 13,
+                  color: "#974F0C",
+                  background: "#FFF7D6",
+                  border: "1px solid #F5CD47",
+                  borderRadius: 6,
+                }}
+              >
+                {/* Per phase, not per project: Proto can be on V1 while Serie
+                    is on V2, so this must not hide the other tabs. */}
+                <strong>{phaseList[tab]?.summary || "This phase"}</strong> was
+                built from <strong>{result.sameVersion}</strong>, so there is
+                nothing to compare. Pick another version, or open another phase.
+              </div>
+            ) : active && !showPlan ? (
               <div>
                 {active.verdicts && active.verdicts.length ? (
                   <>
