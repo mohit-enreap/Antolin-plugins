@@ -1160,6 +1160,20 @@ function App() {
 
   // Compare one phase. Called by run() for the active tab and by openTab when
   // the user moves to another.
+  // The invoke came back with an HTML page instead of JSON, which means it never
+  // reached the resolver — an expired session or a gateway error. Nothing here
+  // can retry past that; the page has to reload to re-authenticate.
+  const isSessionLost = (e) => {
+    const m = String(e?.message || "");
+    return (
+      m.includes("<!DOCTYPE") ||
+      m.includes("Unexpected token '<'") ||
+      m.includes("is not valid JSON")
+    );
+  };
+  const SESSION_MSG =
+    "Your session with Jira has expired. Press Ctrl + Shift + R to reload the page, then try again.";
+
   const compareOne = async (phaseKey) => {
     const res = await invoke("compareQuotation", {
       issue,
@@ -1196,7 +1210,11 @@ function App() {
       }
     } catch (e) {
       console.error("[cmp] tab THREW", e?.name, e?.message);
-      setError(`Could not load that phase. ${e?.message || ""}`);
+      setError(
+        isSessionLost(e)
+          ? SESSION_MSG
+          : `Could not load that phase. ${e?.message || ""}`,
+      );
     } finally {
       setBusy(false);
     }
@@ -1261,7 +1279,9 @@ function App() {
         e,
       );
       setError(
-        `The comparison could not be completed after ${secs()}s. ${e?.message || ""}`,
+        isSessionLost(e)
+          ? SESSION_MSG
+          : `The comparison could not be completed after ${secs()}s. ${e?.message || ""}`,
       );
     } finally {
       setBusy(false);
@@ -1351,7 +1371,11 @@ function App() {
       }
       setError("Still running. Check the Gantt in a minute.");
     } catch (e) {
-      setError("The writes could not be applied. Check the console.");
+      setError(
+        isSessionLost(e)
+          ? SESSION_MSG
+          : "The writes could not be applied. Check the console.",
+      );
     } finally {
       setBusy(false);
     }
