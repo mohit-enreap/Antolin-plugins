@@ -3016,6 +3016,12 @@ export async function updateKPI(event, context) {
           fieldValue10083 + fieldValue10082 + fieldValue10081;
         let DFSValue = null;
         let agCloseStdHrsToSet = undefined; // holds the AG's 10971 to write: a number (set), null (clear), or undefined (don't touch)
+        // Same shape for 10093. Activities write it as they close and it
+        // propagates up, so an AG held actual hours from partly-closed work and
+        // the Phase counted them with no plan behind them. It is now kept only
+        // once the whole group is closed, so the numerator and the denominator
+        // fill together. Actual Hrs (10065) is untouched.
+        let agDfsActToSet = undefined;
         // console.log(`Actual Hours (Sum): ${fieldValue10065}`);
 
         if (["Activity"].includes(type)) {
@@ -3045,6 +3051,8 @@ export async function updateKPI(event, context) {
 
             // Remember the snapshot so we can persist 10971 in the main update payload (Step 3)
             agCloseStdHrsToSet = closeStdHrs;
+            // The group is fully closed, so its propagated actual hours stand.
+            agDfsActToSet = actualHrs;
 
             if (closeStdHrs !== 0 && closeStdHrs !== null) {
               if (actualHrs === null || actualHrs === 0) {
@@ -3067,8 +3075,9 @@ export async function updateKPI(event, context) {
             // Two-way reset (Q2=A): not all closed -> clear DFS and 10971
             DFSValue = null;
             agCloseStdHrsToSet = null;
+            agDfsActToSet = null;
             console.log(
-              `CASE 2.1 [NOT ALL CLOSED]---> Type: ${type} | DFS + 10971 reset to null`,
+              `CASE 2.1 [NOT ALL CLOSED]---> Type: ${type} | DFS + 10971 + 10093 reset to null`,
             );
           }
         } else if (["Project", "Phase"].includes(type)) {
@@ -3135,6 +3144,12 @@ export async function updateKPI(event, context) {
                 // number -> set it; null -> clear it (two-way reset).
                 ...(agCloseStdHrsToSet !== undefined && {
                   [customField10971]: agCloseStdHrsToSet,
+                }),
+                // Only ever set on an Activity Group — undefined elsewhere, so
+                // Activities keep writing 10093 and it still propagates. The
+                // group simply holds it back until every descendant is closed.
+                ...(agDfsActToSet !== undefined && {
+                  [customField10093]: agDfsActToSet,
                 }),
                 [customField10086]: Number(reWorkValue?.toFixed(1)) || null,
                 [customField10070]: Number(extraWorkValue?.toFixed(1)) || null,
