@@ -3037,11 +3037,25 @@ export async function updateKPI(event, context) {
           //     the walk now runs ONLY when the user actually closes the AG.
           // (2) then confirm ALL descendants are closed via areAllDescendantsClosed.
           const agIsClosed = issueStatus === "Closed";
-          const allClosed = agIsClosed
-            ? await areAllDescendantsClosed(issueData.key)
-            : false;
+          // Cancelled is decided on the group alone — no descendant walk. The
+          // workflow only allows Not Started -> Cancelled, so the children are
+          // still Not Started and areAllDescendantsClosed would always fail.
+          // The plan was committed and nothing was delivered, so 10971 takes the
+          // full standard hours and there are no actual hours to record.
+          const agIsCancelled = issueStatus === "CANCELLED";
+          const allClosed =
+            agIsClosed && !agIsCancelled
+              ? await areAllDescendantsClosed(issueData.key)
+              : false;
 
-          if (allClosed) {
+          if (agIsCancelled) {
+            agCloseStdHrsToSet = fieldValue10061;
+            agDfsActToSet = null;
+            DFSValue = null;
+            console.log(
+              `CASE 2.0 [CANCELLED]---> Type: ${type} | 10971 = ${fieldValue10061}, 10093 + DFS null`,
+            );
+          } else if (allClosed) {
             // Q3=A: when all closed, Close Std Hrs (10971) == Total Standard Hrs (10061)
             // Compute in-memory and use it immediately as the denominator (no read-back -> no race)
             // All descendants closed -> the full plan is now the closed standard (Q3=A)
