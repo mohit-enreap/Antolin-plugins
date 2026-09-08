@@ -2461,8 +2461,8 @@ export async function enqueueUpdateLog(event, context) {
 
   console.log(projectKey);
 
-  if (projectKey === "CWO") {
-    // Dev --> CDEMO // Prod --> CWO
+  if (projectKey === "CTEST") {
+    // Dev --> CDEMO // Prod --> CWO // Stage --> CTEST
     let retryCount = 0;
     let success = false;
 
