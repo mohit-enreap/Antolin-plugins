@@ -5163,6 +5163,9 @@ function nextStatusFor(action, status) {
   if (action === PLAN_ACTION.CLOSE_EWRW_ADD)
     return status === "Closed" ? "In Progress" : status;
   if (action === PLAN_ACTION.UPDATE_AND_REOPEN) return "In Progress";
+  // Rule 2.2 — CANCELLED goes back to Not Started. That is the group's only
+  // transition out of that status: id 7 "Reopen".
+  if (action === PLAN_ACTION.UNCANCEL) return "Not Started";
   return status;
 }
 
@@ -6345,6 +6348,7 @@ const PLAN_ACTION = {
   CLEAR_AND_CLOSE: "clear hours and close",
   CLOSE_EWRW_ADD: "close extra work, add standard",
   UPDATE_AND_REOPEN: "reopen and update",
+  UNCANCEL: "un-cancel and update",
   NONE: "no action",
 };
 
@@ -6376,6 +6380,24 @@ function resolvePlanRule(row) {
   // the correction is visible and someone can act on it; its activities stay
   // closed and any new one is created by hand. 2.1.2 leaves it closed, and
   // 10971 falls to 0 on its own once 10061 is null.
+  // A cancelled group whose activity is still in the quotation should not be
+  // cancelled. The hours are corrected if they moved, and the group goes back
+  // to Not Started either way — this is the one rule that fires on SAME, so it
+  // will keep proposing until someone applies it. REMOVE falls through to
+  // rule 3 below, which deletes the group and its children.
+  if (status === "CANCELLED" && !v.startsWith("REMOVE")) {
+    if (v === "CHANGE" || v === "SAME")
+      return {
+        rule: "2.2",
+        action: PLAN_ACTION.UNCANCEL,
+        why:
+          v === "CHANGE"
+            ? "cancelled, and the quotation has changed the hours"
+            : "cancelled, but the quotation still has this activity",
+      };
+    return { rule: 7, action: PLAN_ACTION.NONE, why: "cancelled, no baseline" };
+  }
+
   if (status === "Closed") {
     if (v === "CHANGE")
       return {
@@ -6512,7 +6534,10 @@ async function buildPlan(payload) {
       let after = null;
       if (
         action === PLAN_ACTION.UPDATE ||
-        action === PLAN_ACTION.UPDATE_AND_REOPEN
+        action === PLAN_ACTION.UPDATE_AND_REOPEN ||
+        // UNCANCEL on SAME has nothing to write — the hours already match, and
+        // only the status moves.
+        (action === PLAN_ACTION.UNCANCEL && v.verdict === "CHANGE")
       )
         after = { total: v.newStd, TDL: v.newTDL, COO: v.newCOO, DE: v.newDE };
       if (
@@ -6841,6 +6866,18 @@ export async function applyWritesConsumer(event, context) {
     }
     console.log(`[write] reopens done at ${ms()}`);
 
+    // Rule 2.2 — a cancelled group whose activity is still in the quotation
+    // goes back to Not Started. Only the group moves; its children are already
+    // Not Started, since the workflow has no Cancel below Activity Group level.
+    for (const row of ph.rows) {
+      if (row.action !== "un-cancel and update") continue;
+      const m = await transitionTo(row.key, "Not Started");
+      reopens.push(m);
+      if (["MOVED", "DRY_RUN", "ALREADY"].includes(m.status))
+        reopenedSummaries.add(row.summary);
+    }
+    console.log(`[write] un-cancels done at ${ms()}`);
+
     for (const row of ph.rows) {
       if (
         row.action !== "update 4 fields" &&
@@ -6848,6 +6885,7 @@ export async function applyWritesConsumer(event, context) {
         row.action !== "clear hours and close" &&
         row.action !== "close extra work, add standard" &&
         row.action !== "reopen and update" &&
+        row.action !== "un-cancel and update" &&
         row.action !== "delete extra work, add standard"
       )
         continue;
@@ -6859,7 +6897,8 @@ export async function applyWritesConsumer(event, context) {
         continue;
       // Only write the new hours once the group actually reopened.
       if (
-        row.action === "reopen and update" &&
+        (row.action === "reopen and update" ||
+          row.action === "un-cancel and update") &&
         !reopenedSummaries.has(row.summary)
       )
         continue;
@@ -7382,7 +7421,8 @@ async function patchPhaseSnapshot(
   for (const row of rows) {
     const isUpdate =
       row.action === "update 4 fields" ||
-      (row.action === "reopen and update" &&
+      ((row.action === "reopen and update" ||
+        row.action === "un-cancel and update") &&
         reopenedSummaries &&
         reopenedSummaries.has(row.summary));
     const isClear =

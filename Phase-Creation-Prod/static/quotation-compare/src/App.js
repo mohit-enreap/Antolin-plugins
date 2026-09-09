@@ -699,6 +699,11 @@ const ACTION_STYLE = {
     fg: "#0055CC",
     bg: "#E9F2FF",
   },
+  "un-cancel and update": {
+    label: "Un-cancel",
+    fg: "#0055CC",
+    bg: "#E9F2FF",
+  },
 };
 
 /* A vetoed row also carries action "no action", but for a very different
@@ -809,6 +814,12 @@ function PlanDetailRows({ row }) {
   if (row.action === "reopen and update")
     notes.push(
       "The four hour fields are updated and the group is reopened to In Progress. Its activities stay closed, and any new activity is created by hand.",
+    );
+  if (row.action === "un-cancel and update")
+    notes.push(
+      row.verdict === "SAME"
+        ? "The group goes back to Not Started because the quotation still has this activity. The hours already match, so nothing else is written."
+        : "The four hour fields are updated and the group goes back to Not Started, because the quotation still has this activity. No children are created — the workflow has no Cancel below Activity Group level.",
     );
 
   const accent = { boxShadow: `inset 3px 0 0 ${T.line}` };
