@@ -6652,7 +6652,7 @@ resolver.define("applyPlan", async ({ payload }) => {
 //   - every attempt is returned in a receipt with before, after and status —
 //     the only record of what a write replaced
 
-const DRY_RUN = true;
+const DRY_RUN = false;
 
 const WRITE_FIELDS = [
   { k: "total", cf: "customfield_10061" },
@@ -7903,7 +7903,9 @@ async function closeEwRwChildren(row) {
 async function transitionTo(key, targetStatus) {
   const cur = await api
     .asApp()
-    .requestJira(route`/rest/api/3/issue/${key}?fields=status,summary`);
+    .requestJira(
+      route`/rest/api/3/issue/${key}?fields=status,summary,customfield_10015,customfield_10053`,
+    );
   const f = (await cur.json()).fields || {};
   const from = f.status?.name || null;
   const out = { key, summary: f.summary, from, to: targetStatus };
@@ -7928,6 +7930,43 @@ async function transitionTo(key, targetStatus) {
   }
   out.id = hit.id;
   out.name = hit.name;
+
+  // Closing needs a Start Date (10015) and an End Date (10053): the transition
+  // has a validator that requires both, and dateDifference returns null without
+  // them, so OTD would stay blank even if the close succeeded. Missing ones are
+  // filled with today. Start falls back to the existing End rather than today
+  // when only End is present, so a start can never land after its own end.
+  const startVal = f.customfield_10015 || null;
+  const endVal = f.customfield_10053 || null;
+  if (targetStatus === "Closed" && (!startVal || !endVal)) {
+    // Both are plain date fields — "2026-09-11", no time and no offset.
+    // Confirmed on CTEST-5561; a datetime string here returns 400.
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const patch = {};
+    if (!startVal) patch.customfield_10015 = endVal || today;
+    if (!endVal) patch.customfield_10053 = today;
+    out.datesFilled = patch;
+    if (DRY_RUN) {
+      console.log(`[trn] DRY RUN would fill dates on ${key}:`, patch);
+    } else {
+      try {
+        await retryJiraApiCall(() =>
+          api.asApp().requestJira(route`/rest/api/3/issue/${key}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ fields: patch }),
+          }),
+        );
+        console.log(`[trn] filled dates on ${key}:`, patch);
+      } catch (e) {
+        // Not fatal on its own — the transition below fails with the
+        // validator's own message, which says more than we could here.
+        console.warn(`[trn] could not fill dates on ${key}: ${e?.message}`);
+      }
+    }
+  }
 
   if (DRY_RUN) {
     console.log(

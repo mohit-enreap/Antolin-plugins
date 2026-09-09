@@ -1363,7 +1363,14 @@ function App() {
         await new Promise((r) => setTimeout(r, 3000));
         const now = await invoke("getLastOverwrite", { issue, phaseKey });
         if (now?.record?.at && now.record.at !== prevAt) {
+          // Logged as a string as well: the object collapses in the console and
+          // the panel closes 2.5s later, so there is no time to expand it.
+          // window.__receipt survives the close for copy(JSON.stringify(__receipt)).
           console.log("[write] receipt:", now.record);
+          console.log(
+            "[write] receipt JSON:\n" + JSON.stringify(now.record, null, 1),
+          );
+          window.__receipt = now.record;
           // A phase that has never been through Create Phase has no snapshot,
           // so rule 2 could not create anything. Say so rather than closing as
           // if it worked, but still close — the numbers on screen are stale
