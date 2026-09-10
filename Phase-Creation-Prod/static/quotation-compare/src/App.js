@@ -1497,7 +1497,7 @@ function App() {
           font: inherit; font-size:13px; padding:7px 14px; border-radius:5px; color:${T.body}; }
         .cq-tab:hover { background:#EBECF0; }
         .cq-tab[data-on="true"] { background:${T.surface}; color:${T.ink};
-          font-weight:600; box-shadow:0 1px 2px rgba(9,30,66,.16); }
+          font-weight:400; box-shadow:0 0 0 1px ${T.link}, 0 1px 1px rgba(9,30,66,.16); }
         .cq-btn { appearance:none; border:0; cursor:pointer; font:inherit; font-size:13px;
           font-weight:600; color:#fff; background:${T.link}; padding:7px 16px; border-radius:5px; }
         .cq-btn:hover:enabled { background:${T.linkDark}; }
@@ -1527,206 +1527,261 @@ function App() {
             background: T.surface,
             border: `1px solid ${T.line}`,
             borderRadius: 6,
+            // The strip sits beside the whole left-hand block — the buttons and
+            // the caption — so it centres against the card's height rather than
+            // just the button row's, which left it sitting high.
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "flex-end",
-              gap: 12,
-            }}
-          >
-            <div>
-              <label
-                htmlFor="rev"
-                style={{
-                  display: "block",
-                  marginBottom: 5,
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: 0.4,
-                  textTransform: "uppercase",
-                  color: T.faint,
-                }}
-              >
-                Compare against
-              </label>
-              <select
-                id="rev"
-                className="cq-sel"
-                onClick={bumpVersionClicks}
-                value={targetVersion}
-                disabled={!versionInfo}
-                onChange={(e) => {
-                  setTargetVersion(e.target.value);
-                  // Cached phases belong to the previous version.
-                  setByPhase({});
-                  setData(null);
-                }}
-              >
-                {/* Three states, not two: null means the version list has not
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                alignItems: "flex-end",
+                gap: 12,
+              }}
+            >
+              <div>
+                <label
+                  htmlFor="rev"
+                  style={{
+                    display: "block",
+                    marginBottom: 5,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    textTransform: "uppercase",
+                    color: T.faint,
+                  }}
+                >
+                  Compare against
+                </label>
+                <select
+                  id="rev"
+                  className="cq-sel"
+                  onClick={bumpVersionClicks}
+                  value={targetVersion}
+                  disabled={!versionInfo}
+                  onChange={(e) => {
+                    setTargetVersion(e.target.value);
+                    // Cached phases belong to the previous version.
+                    setByPhase({});
+                    setData(null);
+                  }}
+                >
+                  {/* Three states, not two: null means the version list has not
                     come back yet, and showing "Phase Configuration" during that
                     window tells the user something false. */}
-                {/* "built from this" read customfield_12738, which records what
+                  {/* "built from this" read customfield_12738, which records what
                     the link says rather than what Create Phase used — a project
                     built from Phase Configuration and linked afterwards was
                     labelled wrongly. builtFromStamp is the truthful answer but
                     only arrives after a compare, so the label is dropped. */}
-                {!versionInfo ? (
-                  <option value="">Loading…</option>
-                ) : versionInfo.mismatch ? (
-                  <option value="">Wrong quotation linked</option>
-                ) : !versionInfo.hasCatalogNew &&
-                  !(versionInfo.linked && versionInfo.closed?.length) ? (
-                  <option value="">Nothing to compare against</option>
-                ) : (
-                  <>
-                    <option value="__none__">Select a version…</option>
-                    {versionInfo.hasCatalogNew ? (
-                      <option value="">Phase Configuration</option>
-                    ) : null}
-                    {(versionInfo.closed || []).map((v) => (
-                      <option key={v} value={v}>
-                        {v}
-                      </option>
-                    ))}
-                  </>
-                )}
-              </select>
-              {devMode ? (
-                <span
-                  style={{
-                    marginLeft: 8,
-                    fontSize: 11,
-                    color: T.red,
-                    fontWeight: 700,
-                  }}
-                >
-                  DEV
-                </span>
-              ) : null}
-            </div>
-            <button
-              className="cq-btn"
-              onClick={run}
-              disabled={
-                busy || !issue || !versionInfo || targetVersion === "__none__"
-              }
-            >
-              {busy && mode !== "plan"
-                ? "Comparing…"
-                : !versionInfo
-                  ? "Loading…"
-                  : "Compare"}
-            </button>
-            {/* Diagnostics. They print to the browser console and mean nothing
+                  {!versionInfo ? (
+                    <option value="">Loading…</option>
+                  ) : versionInfo.mismatch ? (
+                    <option value="">Wrong quotation linked</option>
+                  ) : !versionInfo.hasCatalogNew &&
+                    !(versionInfo.linked && versionInfo.closed?.length) ? (
+                    <option value="">Nothing to compare against</option>
+                  ) : (
+                    <>
+                      <option value="__none__">Select a version…</option>
+                      {versionInfo.hasCatalogNew ? (
+                        <option value="">Phase Configuration</option>
+                      ) : null}
+                      {(versionInfo.closed || []).map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </>
+                  )}
+                </select>
+                {devMode ? (
+                  <span
+                    style={{
+                      marginLeft: 8,
+                      fontSize: 11,
+                      color: T.red,
+                      fontWeight: 700,
+                    }}
+                  >
+                    DEV
+                  </span>
+                ) : null}
+              </div>
+              <button
+                className="cq-btn"
+                onClick={run}
+                disabled={
+                  busy || !issue || !versionInfo || targetVersion === "__none__"
+                }
+              >
+                {busy && mode !== "plan"
+                  ? "Comparing…"
+                  : !versionInfo
+                    ? "Loading…"
+                    : "Compare"}
+              </button>
+              {/* Diagnostics. They print to the browser console and mean nothing
                 to a normal user, so they sit behind the fifteen-click unlock
                 rather than being removed — reaching them should not need a
                 deploy. */}
-            {devMode ? (
+              {devMode ? (
+                <button
+                  className="cq-btn"
+                  onClick={dump}
+                  disabled={!issue}
+                  style={{ background: T.muted }}
+                  title="Print stored Create Phase data to the browser console"
+                >
+                  Storage
+                </button>
+              ) : null}
+              {devMode ? (
+                <button
+                  className="cq-btn"
+                  onClick={quot}
+                  disabled={!issue || !versionInfo?.linked}
+                  style={{ background: T.muted }}
+                  title="Print the quotation blob and what differs against the selected version"
+                >
+                  Quotation
+                </button>
+              ) : null}
+              {devMode ? (
+                <button
+                  className="cq-btn"
+                  onClick={rawJson}
+                  disabled={!issue || !versionInfo?.linked}
+                  style={{ background: T.muted }}
+                  title="Print both raw quotation blobs and the catalogs, for checking"
+                >
+                  Raw JSON
+                </button>
+              ) : null}
+              {devMode ? (
+                <button
+                  className="cq-btn"
+                  onClick={cook}
+                  disabled={!issue || !phaseList[tab]?.summary}
+                  style={{ background: T.muted }}
+                  title="Print the cooked hours for this phase, and for the selected version"
+                >
+                  Cook
+                </button>
+              ) : null}
+              {devMode ? (
+                <button
+                  className="cq-btn"
+                  onClick={workflow}
+                  disabled={!issue || !phaseList[tab]?.key}
+                  style={{ background: T.muted }}
+                  title="Print the available transitions per issue type and status"
+                >
+                  Workflow
+                </button>
+              ) : null}
+              {devMode ? (
+                <button
+                  className="cq-btn"
+                  onClick={plan}
+                  disabled={busy || !issue}
+                  style={{ background: T.muted }}
+                  title="Dry run — show what would be written. Nothing is changed."
+                >
+                  {busy && mode === "plan" ? "Planning…" : "Plan"}
+                </button>
+              ) : null}
               <button
                 className="cq-btn"
-                onClick={dump}
-                disabled={!issue}
+                onClick={overwrite}
+                disabled={
+                  busy ||
+                  !issue ||
+                  !phaseList[tab]?.key ||
+                  !versionInfo ||
+                  targetVersion === "__none__" ||
+                  // Nothing has been compared for this phase yet, so there is no
+                  // result on screen to overwrite against.
+                  !active
+                }
                 style={{ background: T.muted }}
-                title="Print stored Create Phase data to the browser console"
+                title="Apply the plan for the phase you are looking at."
               >
-                Storage
+                {phaseList[tab]?.summary
+                  ? `Overwrite ${phaseList[tab].summary}`
+                  : "Overwrite"}
               </button>
-            ) : null}
-            {devMode ? (
               <button
                 className="cq-btn"
-                onClick={quot}
-                disabled={!issue || !versionInfo?.linked}
-                style={{ background: T.muted }}
-                title="Print the quotation blob and what differs against the selected version"
+                onClick={close}
+                style={{
+                  background: "transparent",
+                  color: T.body,
+                  border: `1px solid ${T.line}`,
+                }}
+                title="Close and go back to the issue"
               >
-                Quotation
+                Cancel
               </button>
-            ) : null}
-            {devMode ? (
-              <button
-                className="cq-btn"
-                onClick={rawJson}
-                disabled={!issue || !versionInfo?.linked}
-                style={{ background: T.muted }}
-                title="Print both raw quotation blobs and the catalogs, for checking"
-              >
-                Raw JSON
-              </button>
-            ) : null}
-            {devMode ? (
-              <button
-                className="cq-btn"
-                onClick={cook}
-                disabled={!issue || !phaseList[tab]?.summary}
-                style={{ background: T.muted }}
-                title="Print the cooked hours for this phase, and for the selected version"
-              >
-                Cook
-              </button>
-            ) : null}
-            {devMode ? (
-              <button
-                className="cq-btn"
-                onClick={workflow}
-                disabled={!issue || !phaseList[tab]?.key}
-                style={{ background: T.muted }}
-                title="Print the available transitions per issue type and status"
-              >
-                Workflow
-              </button>
-            ) : null}
-            {devMode ? (
-              <button
-                className="cq-btn"
-                onClick={plan}
-                disabled={busy || !issue}
-                style={{ background: T.muted }}
-                title="Dry run — show what would be written. Nothing is changed."
-              >
-                {busy && mode === "plan" ? "Planning…" : "Plan"}
-              </button>
-            ) : null}
-            <button
-              className="cq-btn"
-              onClick={overwrite}
-              disabled={
-                busy ||
-                !issue ||
-                !phaseList[tab]?.key ||
-                !versionInfo ||
-                targetVersion === "__none__" ||
-                // Nothing has been compared for this phase yet, so there is no
-                // result on screen to overwrite against.
-                !active
-              }
-              style={{ background: T.muted }}
-              title="Apply the plan for the phase you are looking at."
-            >
-              {phaseList[tab]?.summary
-                ? `Overwrite ${phaseList[tab].summary}`
-                : "Overwrite"}
-            </button>
-            <button
-              className="cq-btn"
-              onClick={close}
-              style={{
-                background: "transparent",
-                color: T.body,
-                border: `1px solid ${T.line}`,
-              }}
-              title="Close and go back to the issue"
-            >
-              Cancel
-            </button>
+            </div>
+            <p style={{ margin: "8px 0 0", fontSize: 12, color: T.faint }}>
+              Compare shows what would change. Overwrite applies it to the phase
+              you are looking at.
+            </p>
           </div>
-          <p style={{ margin: "8px 0 0", fontSize: 12, color: T.faint }}>
-            Compare shows what would change. Overwrite applies it to the phase
-            you are looking at.
-          </p>
+
+          {/* Beside the left-hand block rather than inside the button row, so
+              the card's alignItems centres it against the card's own height and
+              the space above and below matches. Each tab carries what that
+              phase currently is — a version, STATIC for the catalog, or OLD PRJ
+              for one created before stamping. */}
+          <div
+            style={{
+              display: "inline-flex",
+              gap: 2,
+              padding: 3,
+              background: "#EBECF0",
+              borderRadius: 7,
+              flexShrink: 0,
+            }}
+          >
+            {(phaseList.length ? phaseList : phases).map((p, i) => (
+              <button
+                key={p.key || p.phase}
+                className="cq-tab"
+                data-on={i === tab}
+                onClick={() => openTab(i)}
+                style={{ padding: "4px 12px", lineHeight: 1.25 }}
+              >
+                <div>{p.summary || p.phase}</div>
+                <div
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    letterSpacing: 0.4,
+                    marginTop: 4,
+                    color: !p.builtFrom
+                      ? T.faint
+                      : p.builtFrom === "Phase Configuration"
+                        ? T.muted
+                        : T.linkDark,
+                  }}
+                >
+                  {!p.builtFrom
+                    ? "OLD PRJ"
+                    : p.builtFrom === "Phase Configuration"
+                      ? "NEW PRJ - STATIC"
+                      : p.builtFrom}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* A configuration problem rather than a run-time one, so it sits above
@@ -1811,28 +1866,6 @@ function App() {
                 phases. Nothing has been written.
               </div>
             ) : null}
-
-            <div
-              style={{
-                display: "inline-flex",
-                gap: 3,
-                padding: 3,
-                background: "#EBECF0",
-                borderRadius: 7,
-                marginBottom: 16,
-              }}
-            >
-              {(phaseList.length ? phaseList : phases).map((p, i) => (
-                <button
-                  key={p.key || p.phase}
-                  className="cq-tab"
-                  data-on={i === tab}
-                  onClick={() => openTab(i)}
-                >
-                  {p.summary || p.phase}
-                </button>
-              ))}
-            </div>
 
             {active && showPlan ? (
               <div>

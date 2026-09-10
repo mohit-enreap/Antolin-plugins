@@ -6120,8 +6120,25 @@ resolver.define("listPhases", async ({ payload }) => {
       .filter((k) => k.typeId === "10016")
       .map((k) => ({ key: k.key, summary: k.summary }))
       .sort((a, b) => String(a.summary).localeCompare(String(b.summary)));
+
+    // What each phase currently is, read from its own snapshot. Three states:
+    // a version name, "Phase Configuration" for the static catalog, or absent
+    // for a phase created before stamping existed.
+    for (const p of phases) {
+      const phaseName = p.summary.replace(/^\d+\s*/, "").trim();
+      try {
+        const b64 = await storage.get(`${projectKey}_${phaseName}`);
+        p.builtFrom = b64
+          ? (JSON.parse(pako.inflate(base64ToUint8Array(b64), { to: "string" }))
+              .quotationVersion ?? null)
+          : null;
+      } catch (e) {
+        p.builtFrom = null;
+      }
+    }
+
     console.log(
-      `[phases] ${projectKey}: ${phases.map((p) => p.summary).join(", ") || "none"}`,
+      `[phases] ${projectKey}: ${phases.map((p) => `${p.summary}=${p.builtFrom ?? "none"}`).join(", ") || "none"}`,
     );
     return { ok: true, projectKey, phases };
   } catch (e) {
@@ -6652,7 +6669,7 @@ resolver.define("applyPlan", async ({ payload }) => {
 //   - every attempt is returned in a receipt with before, after and status —
 //     the only record of what a write replaced
 
-const DRY_RUN = false;
+const DRY_RUN = true;
 
 const WRITE_FIELDS = [
   { k: "total", cf: "customfield_10061" },
