@@ -2480,7 +2480,8 @@ export async function enqueueUpdateLog(event, context) {
 
   console.log(projectKey);
 
-  if (projectKey === "CTEST") {
+  // Dev --> CDEMO // Prod --> CWO // Staging --> CTEST
+  if (projectKey === "CWO" || projectKey === "CTEST") {
     // Dev --> CDEMO // Prod --> CWO // Stage --> CTEST
     let retryCount = 0;
     let success = false;
@@ -6181,7 +6182,10 @@ resolver.define("dumpStorage", async ({ payload }) => {
   // Same guard the codebase already uses at line 1963. displayConditions hides a
   // button; it is not a boundary. This refuses to read production storage even
   // if the resolver is invoked directly.
-  if (!projectKey || !projectKey.startsWith("CTEST")) {
+  if (
+    !projectKey ||
+    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+  ) {
     return {
       ok: false,
       error: "NOT_ALLOWED",
@@ -6256,7 +6260,10 @@ resolver.define("dumpStorage", async ({ payload }) => {
 resolver.define("dumpTransitions", async ({ payload }) => {
   const projectKey = payload?.issue?.key;
   const phaseKey = payload?.phaseKey;
-  if (!projectKey || !projectKey.startsWith("CTEST")) {
+  if (
+    !projectKey ||
+    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+  ) {
     return {
       ok: false,
       error: "NOT_ALLOWED",
@@ -6513,7 +6520,10 @@ function resolvePlanRule(row) {
 // A copy would drift the moment one side changed.
 async function buildPlan(payload) {
   const projectKey = payload?.issue?.key;
-  if (!projectKey || !projectKey.startsWith("CTEST")) {
+  if (
+    !projectKey ||
+    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+  ) {
     return {
       ok: false,
       error: "NOT_ALLOWED",
@@ -6702,7 +6712,10 @@ const WRITE_FIELDS = [
 resolver.define("applyWrites", async ({ payload }) => {
   const projectKey = payload?.issue?.key;
   const phaseKey = payload?.phaseKey;
-  if (!projectKey || !projectKey.startsWith("CTEST")) {
+  if (
+    !projectKey ||
+    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+  ) {
     return {
       ok: false,
       error: "NOT_ALLOWED",
@@ -7334,7 +7347,10 @@ async function rollupProjectTotal(projectKey, predicted) {
 // Manual repair, if a queued job ever half-fails. Not on the normal path.
 resolver.define("rollupTotals", async ({ payload }) => {
   const projectKey = payload?.issue?.key;
-  if (!projectKey || !projectKey.startsWith("CTEST")) {
+  if (
+    !projectKey ||
+    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+  ) {
     return {
       ok: false,
       error: "NOT_ALLOWED",
@@ -7348,7 +7364,10 @@ resolver.define("rollupTotals", async ({ payload }) => {
 resolver.define("getLastOverwrite", async ({ payload }) => {
   const projectKey = payload?.issue?.key;
   const phaseKey = payload?.phaseKey;
-  if (!projectKey || !projectKey.startsWith("CTEST")) {
+  if (
+    !projectKey ||
+    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+  ) {
     return {
       ok: false,
       error: "NOT_ALLOWED",
