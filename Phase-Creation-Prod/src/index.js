@@ -2187,8 +2187,10 @@ async function fetchParentIssueId(issueId) {
   }
 }
 
-// Returns true only if EVERY descendant (Activity, Work Order, Task) under
-// the given issue is Closed. Used to gate Activity Group DFS + 10971 snapshot.
+// Returns true only if EVERY descendant (Activity, Work Order, Task) under the
+// given issue is finished — Closed or CANCELLED. Cancelled work will not be
+// done, so it does not hold a group open. Used to gate the Activity Group's
+// DFS and 10971 snapshot.
 async function areAllDescendantsClosed(issueKey) {
   let allClosed = true; // assume closed until we find one that isn't
   let descendantCount = 0; // guard against "no children" returning a false true
@@ -2221,7 +2223,11 @@ async function areAllDescendantsClosed(issueKey) {
       const childIssue = await childRes.json();
 
       descendantCount++;
-      if (childIssue.fields.status.name !== "Closed") {
+      // CANCELLED counts as finished. Work that was cancelled is not going to
+      // be done, so a group whose children are all Closed or CANCELLED has
+      // nothing outstanding and should snapshot its 10971 and 10093.
+      const childStatus = childIssue.fields.status.name;
+      if (childStatus !== "Closed" && childStatus !== "CANCELLED") {
         allClosed = false;
         return; // short-circuit: one open descendant is enough to fail
       }
@@ -6682,7 +6688,7 @@ resolver.define("applyPlan", async ({ payload }) => {
 //   - every attempt is returned in a receipt with before, after and status —
 //     the only record of what a write replaced
 
-const DRY_RUN = true;
+const DRY_RUN = false;
 
 const WRITE_FIELDS = [
   { k: "total", cf: "customfield_10061" },
