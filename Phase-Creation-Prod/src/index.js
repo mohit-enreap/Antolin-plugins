@@ -1277,10 +1277,23 @@ resolver1.define("create-activity", async ({ payload }) => {
     // const totalStandard = filteredIssues.filter((issue) => issue.summary.includes("Standard")).length;//1
     const totalStandard = filteredIssues.length - totalExtraWork - totalReWork; //1
 
+    // Normally the standard is created FIRST — Create Phase disables the extra
+    // work and rework fields on the first pass and locks standardLoop
+    // afterwards — so a standard activity never arrives after extra work
+    // exists, whatever standardLoop was set to. The quotation overwrite breaks
+    // that assumption: rulings 1.5, 2 and 3 add a standard to a group that
+    // already has extra work. totalStandard ignores EW/RW children, so the new
+    // activity would take Loop 1, which the extra work is already using. Count
+    // every child in that one case so it lands after them.
+    const stdStart =
+      totalStandard === 0 && totalExtraWork + totalReWork > 0
+        ? filteredIssues.length
+        : totalStandard;
+
     // Process Standard Loops
     await processLoops(
       "",
-      totalStandard,
+      stdStart,
       standardLoop - totalStandard,
       additionalProps,
       "Loop",
