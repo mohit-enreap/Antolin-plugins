@@ -5,7 +5,7 @@ export const T_TIMELINES_STD = {
   name: "T_TimelinesSTD",
   products: {
     "Door Panel": {
-      phase_0: 1,
+      phase_0: 3,
       phase_1: 14,
       phase_2: 16,
       phase_3_4: 50,
@@ -23,13 +23,13 @@ export const T_TIMELINES_STD = {
       phase_3_4: 50, // 93
     },
     IP: {
-      phase_0: 13,
+      phase_0: 3,
       phase_1: 16,
       phase_2: 18,
       phase_3_4: 50,
     },
     "Centre Console": {
-      phase_0: 13,
+      phase_0: 3,
       phase_1: 16,
       phase_2: 18,
       phase_3_4: 50,

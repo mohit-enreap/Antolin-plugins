@@ -1992,12 +1992,12 @@ function calculateGeometricalStudy(activityName, activityDetails, globalFlags, p
     // ------------------------------------------------------
     // Skip if Product is not selected
     // ------------------------------------------------------
-    if (product.componentSelected) {
-      // alert(productName + "| Component  selected ==> " + product.componentSelected)
-    } else if (!product.componentSelected) {
-      // alert(productName + "Component  not selected. ..."+product.componentSelected)
-      continue;
-    }
+    // if (product.componentSelected) {
+    //   // alert(productName + "| Component  selected ==> " + product.componentSelected)
+    // } else if (!product.componentSelected) {
+    //   // alert(productName + "Component  not selected. ..."+product.componentSelected)
+    //   continue;
+    // }
     // ------------------------------------------------------
     // Product Level Loops
     // ------------------------------------------------------

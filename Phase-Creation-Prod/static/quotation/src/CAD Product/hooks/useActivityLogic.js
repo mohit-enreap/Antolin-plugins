@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useContext } from "react";
+import { useState, useEffect, useMemo, useContext, useRef } from "react";
 import { initialJsonData } from "../data/jsonData";
 import { calculateResults } from "./useCalculations";
 import { get2DActivities } from "../utils/activityUtils";
@@ -133,6 +133,8 @@ export function useActivityLogic() {
   // Data Management Weeks (separate variable for editable weeks)
   const [offerDMWeeks, setOfferDMWeeks] = useState(3);
 
+  const [dataForGroup, setDataForGroup] = useState(null);
+
   //===================
 
   // const DEFAULT_GLOBAL = {
@@ -259,6 +261,12 @@ export function useActivityLogic() {
       setCustomerProdData(storedData.customerProductData);
     }
 
+    // for linking group component table with Parent Component table
+    if (storedData.dataForGroup) {
+      console.log("Data For Group --> : \n", storedData.dataForGroup);
+      setDataForGroup(storedData.dataForGroup);
+    }
+
     // Global OLD logic
     // if (storedData.Global) {
     //   setGlobalParams(storedData.Global);
@@ -292,6 +300,18 @@ export function useActivityLogic() {
         "Geometrical Study": "NO",
         Feasibility: "NO",
       });
+    }
+
+    // Only set default weeks if storedData didn't already provide phaseDates
+    if (!storedData?.phaseDates && issueData?.product) {
+      const productTimeline = T_TIMELINES_STD?.products?.[issueData?.product];
+      setManualWeeks({
+        phase_0: productTimeline?.phase_0 ?? 3,
+        phase_1: productTimeline?.phase_1 ?? 14,
+        phase_2: productTimeline?.phase_2 ?? 16,
+        phase_3_4: productTimeline?.phase_3_4 ?? 50,
+      });
+      console.log("Set weeks ---> \n", T_TIMELINES_STD?.products?.[issueData?.product]);
     }
 
     if (issueData?.customer) {
@@ -377,162 +397,174 @@ export function useActivityLogic() {
 
   // --- for PDF Json start-----
 
-  function buildPDFOutput(data) {
-    console.log("PDF DATA --> ", data);
+function buildPDFOutput(data) {
+  console.log("PDF DATA --> ", data);
 
-    // Guard clause: return empty structure if data is null/undefined
-    if (!data) {
-      return {
-        activities: [],
-        productParts: {},
-        addOnComponents: [],
-      };
-    }
+  if (!data) {
+    return {
+      activities: [],
+      productParts: {},
+      addOnComponents: [],
+    };
+  }
 
-    const activities = [];
-    const productParts = {};
-    const addOnComponents = [];
+  const activities = [];
+  const productParts = {};
+  const addOnComponents = [];
 
-    const IGNORE_KEYS = [
-      "checked",
-      "order",
-      "extraWorkLoop",
-      "reWorkLoop",
-      "standardLoop",
-    ];
+  const IGNORE_KEYS = [
+    "checked",
+    "order",
+    "extraWorkLoop",
+    "reWorkLoop",
+    "standardLoop",
+  ];
 
-    const ADD_ON_KEY = "ADD ON COMPONENTS";
+  const ADD_ON_KEY = "ADD ON COMPONENTS";
 
-    Object.entries(data.activities || {}).forEach(
-      ([activityName, activity]) => {
-        if (!activity.checked) return;
+  const normalizeKey = (key) =>
+    String(key ?? "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toUpperCase();
 
-        const activityLabel = activityName.includes("|")
-          ? activityName.split("|")[1].trim()
-          : activityName;
+  Object.entries(data.activities || {}).forEach(
+    ([activityName, activity]) => {
+      if (!activity?.checked) return;
 
-        const is2D = activityName.startsWith("2D DELIVERABLES");
-        const isDM = activityName.startsWith("DATA MANAGEMENT");
-        const isGS = activityName.startsWith("GEOMETRICAL STUDY");
+      const normalizedActivityName = normalizeKey(activityName);
 
-        // 👉 Get all valid product entries (NORMAL ROOF, SUN ROOF etc.)
-        const entries = Object.entries(activity).filter(
-          ([key, val]) =>
-            typeof val === "object" &&
-            val !== null &&
-            !IGNORE_KEYS.includes(key),
+      const isAddOnActivity =
+        normalizedActivityName.startsWith(ADD_ON_KEY);
+
+      const activityLabel = activityName.includes("|")
+        ? activityName.split("|")[1].trim()
+        : activityName;
+
+      const is2D = activityName.startsWith("2D DELIVERABLES");
+      const isDM = activityName.startsWith("DATA MANAGEMENT");
+      const isGS = activityName.startsWith("GEOMETRICAL STUDY");
+
+      // =====================================================
+      // ADD ON COMPONENTS
+      // Only activities whose name starts with
+      // "ADD ON COMPONENTS"
+      // =====================================================
+      if (isAddOnActivity) {
+        const addOnEntry = Object.entries(activity).find(
+          ([key]) => normalizeKey(key) === ADD_ON_KEY
         );
 
-        if (!entries.length) return;
+        const addOnProduct = addOnEntry?.[1];
 
-        let isAddOnActivity = false;
-
-        // =====================================================
-        // ✅ ADD ON COMPONENTS (capture separately)
-        // =====================================================
-        entries.forEach(([productName, product]) => {
-          if (productName === ADD_ON_KEY) {
-            isAddOnActivity = true;
-
-            addOnComponents.push({
-              activity: activityLabel,
-              product: productName,
-              noOfComponent: product.noOfComponent || 0,
-            });
-          }
+        addOnComponents.push({
+          activity: activityLabel,
+          product: ADD_ON_KEY,
+          noOfComponent: addOnProduct?.noOfComponent ?? 0,
         });
+      }
 
-        const rows = [];
-        let totalHours = 0;
+      // =====================================================
+      // NORMAL PRODUCT ENTRIES
+      // EXCLUDE ADD ON COMPONENTS
+      // =====================================================
+      const entries = Object.entries(activity).filter(
+        ([key, val]) =>
+          typeof val === "object" &&
+          val !== null &&
+          !IGNORE_KEYS.includes(key) &&
+          normalizeKey(key) !== ADD_ON_KEY,
+      );
 
-        // =====================================================
-        // ✅ 3D ACTIVITIES (INCLUDING ADD-ON)
-        // =====================================================
-        if (!is2D && !isDM && !isGS) {
-          const [_, firstProduct] = entries[0];
-          const subacts = firstProduct.subactivity || {};
+      if (!entries.length) return;
 
-          //  CASE 1: Subactivities exist
-          if (Object.keys(subacts).length > 0) {
-            Object.entries(subacts).forEach(([subName, sub]) => {
-              const hours = Number(sub.TDL || 0);
-              totalHours += hours;
+      const rows = [];
+      let totalHours = 0;
 
-              rows.push({
-                type: "SUB",
-                label: `~ ${subName}`,
-                name: subName,
-                hours: Number(hours.toFixed(2)),
-                Proto: sub.Proto || 0,
-                Serie: sub.Serie || 0,
-              });
-            });
-          }
+      // =====================================================
+      // 3D ACTIVITIES
+      // =====================================================
+      if (!is2D && !isDM && !isGS) {
+        const [_, firstProduct] = entries[0];
+        const subacts = firstProduct.subactivity || {};
 
-          //  CASE 2: NO subactivities → take FIRST PRODUCT (IMPORTANT FIX)
-          else {
+        if (Object.keys(subacts).length > 0) {
+          Object.entries(subacts).forEach(([subName, sub]) => {
+            const hours = Number(sub.TDL || 0);
+            totalHours += hours;
+
             rows.push({
-              type: "PRODUCT",
-              label: `~  ${activityLabel}`,
-              name: activityLabel,
-              Proto: firstProduct.Proto || 0,
-              Serie: firstProduct.Serie || 0,
+              type: "SUB",
+              label: `~ ${subName}`,
+              name: subName,
+              hours: Number(hours.toFixed(2)),
+              Proto: sub.Proto || 0,
+              Serie: sub.Serie || 0,
             });
-          }
-        }
-        // =====================================================
-        //  2D / DM / GS (PRODUCT LEVEL ONLY)
-        // =====================================================
-        else {
-          const [_, product] = entries[0];
-
+          });
+        } else {
           rows.push({
             type: "PRODUCT",
             label: `~  ${activityLabel}`,
             name: activityLabel,
-            Proto: product.Proto || 0,
-            Serie: product.Serie || 0,
+            Proto: firstProduct.Proto || 0,
+            Serie: firstProduct.Serie || 0,
           });
         }
+      }
 
-        // =====================================================
-        // ✅ POPULATE PRODUCT PARTS (FOR ALL ACTIVITIES)
-        // =====================================================
-        // Iterate ALL entries and add products (NORMAL ROOF, SUN ROOF, etc.)
-        // Skip ONLY the "ADD ON COMPONENTS" entry
-        entries.forEach(([productName, product]) => {
-          // Skip ADD ON COMPONENTS - it's handled separately above
-          if (productName === ADD_ON_KEY) return;
+      // =====================================================
+      // 2D / DM / GS
+      // =====================================================
+      else {
+        const [_, product] = entries[0];
 
-          // Add product to productParts if not already present
-          if (!productParts[productName]) {
-            productParts[productName] = {
-              // If componentSelected is true, use noOfComponent value; otherwise use "-"
-              noOfComponent: product.componentSelected
-                ? product.noOfComponent || 1
-                : "-",
-            };
-          }
-        });
-
-        // =====================================================
-        //  PUSH FINAL ACTIVITY
-        // =====================================================
-        activities.push({
+        rows.push({
+          type: "PRODUCT",
+          label: `~  ${activityLabel}`,
           name: activityLabel,
-          originalName: activityName,
-          hours: Number(totalHours.toFixed(2)),
-          rows,
+          Proto: product.Proto || 0,
+          Serie: product.Serie || 0,
         });
-      },
-    );
+      }
 
-    return {
-      activities,
-      productParts, //  NORMAL ROOF etc.
-      addOnComponents, //  ADD ON COMPONENTS
-    };
-  }
+      // =====================================================
+      // PRODUCT PARTS
+      // =====================================================
+      entries.forEach(([productName, product]) => {
+        if (!productParts[productName]) {
+          productParts[productName] = {
+            noOfComponent: product.componentSelected
+              ? product.noOfComponent || 1
+              : "-",
+          };
+        }
+      });
+
+      // =====================================================
+      // FINAL ACTIVITY
+      // =====================================================
+      activities.push({
+        name: activityLabel,
+        originalName: activityName,
+        hours: Number(totalHours.toFixed(2)),
+        rows,
+      });
+    },
+  );
+
+  console.log("BUILT PDF OUTPUT -->", {
+    activities,
+    productParts,
+    addOnComponents,
+  });
+
+  return {
+    activities,
+    productParts,
+    addOnComponents,
+  };
+}
 
   //-----------
   // //=========update Phases Number based on OEM start===========
@@ -1037,7 +1069,7 @@ If subactivities are EMPTY or NOT FOUND in mapping
   });
 
   // ----------------- Phase Weeks from External Data -----------------
-  const phaseWeeks = T_TIMELINES_STD?.products?.["Headliner"] || {
+  const phaseWeeks = T_TIMELINES_STD?.products?.[issueData?.product] || {
     phase_0: 0,
     phase_1: 0,
     phase_2: 0,
@@ -1070,6 +1102,12 @@ If subactivities are EMPTY or NOT FOUND in mapping
       ...prev,
       [key]: value,
     }));
+
+    // SYNCHRONIZATION LOGIC: 
+    // Only triggers when a user explicitly clicks the Phase 0 checkbox
+    if (key === "phase_0") {
+      setOfferDMWeeks(value ? manualWeeks.phase_0 : 0);
+    }
   }
 
   function updateManualWeeks(key, weeks) {
@@ -1077,6 +1115,12 @@ If subactivities are EMPTY or NOT FOUND in mapping
       ...prev,
       [key]: weeks,
     }));
+
+    // SYNCHRONIZATION LOGIC: 
+    // Only triggers if a user actively changes the weeks input for Phase 0
+    if (key === "phase_0") {
+      setOfferDMWeeks(phaseFlags.phase_0 ? weeks : 0);
+    }
   }
 
   //---to get Scaling factor start--
@@ -1388,6 +1432,169 @@ If subactivities are EMPTY or NOT FOUND in mapping
       JSON.stringify(val, null, 2),
     );
   }
+
+//======component Table Linking====
+
+// ==================================================
+// Handle Component Selection JSON
+//
+// ProductComponents.jsx
+//        ↓
+//      finalJson
+//
+// finalJson contains:
+// 1. Complete JSON       → For Save
+// 2. latest              → For Runtime Update
+//
+// We use ONLY latest for calling
+// applyGlobalProductChange().
+// ==================================================
+
+// Whole JSON
+//    ↓
+// Save whole JSON
+//    ↓
+// Read latest
+//    ↓
+// Update  Latest ONLY changed parent/component
+
+// function handleComponentSelection(finalJson) {
+//     console.log("[COMPONENT SELECTION JSON]", finalJson);
+
+//   setDataForGroup(prevData => {
+//     const nextState = {
+//         ...prevData,
+//         GroupsOfComponents: finalJson?.GroupsOfComponents || prevData?.GroupsOfComponents || {}
+//     };
+
+//     // Check if SingleComponents exists and is a non-empty object
+//     const hasSingleComponents = 
+//         finalJson?.SingleComponents && 
+//         typeof finalJson.SingleComponents === "object" && 
+//         Object.keys(finalJson.SingleComponents).length > 0;
+
+//     if (hasSingleComponents) {
+//         nextState.SingleComponents = finalJson.SingleComponents;
+//     } else {
+//         // Option A: If SingleComponents is missing/empty, safely remove it from state
+//         delete nextState.SingleComponents;
+
+//         // Option B: If you prefer keeping the existing SingleComponents instead, comment out Option A
+//     }
+
+//     return nextState;
+//   });
+//     // ==================================================
+//     // 1. STORE COMPLETE JSON
+//     //
+//     // IMPORTANT:
+//     // Keep the COMPLETE JSON for Save.
+//     //
+//     // This contains:
+//     // - All Groups
+//     // - All Parent Totals
+//     // - All Child Components
+//     // - All Single Components
+//     // - latest change
+//     //
+//     // Dummy line for now:
+//     // ==================================================
+
+//     // TODO: Save this complete JSON later
+//     // setComponentJson(finalJson);
+
+//     // Example:
+//     // quotationData.componentSelection = finalJson;
+
+//     // ==================================================
+//     // 2. GET ONLY LATEST CHANGE
+//     //
+//     // We DON'T loop through all Groups anymore.
+//     //
+//     // This reduces runtime update calls.
+//     // ==================================================
+
+//     const latest = finalJson?.latest;
+
+//     // No latest change available
+//     if (!latest) {
+//         console.log("[COMPONENT SELECTION] No latest change");
+//         return;
+//     }
+
+//     console.log("[LATEST COMPONENT CHANGE]", latest);
+
+//     // ==================================================
+//     // 3. GROUP COMPONENT
+//     //
+//     // Example latest:
+//     //
+//     // {
+//     //     type: "GROUP",
+//     //     parent: "GLOVE BOX ASSY (MAIN PARTS)1",
+//     //     component: "Housing",
+//     //     componentValue: 2,
+//     //     parentTotal: 5
+//     // }
+//     //
+//     // Only this parent will be updated.
+//     // ==================================================
+
+//     if (latest.type === "GROUP") {
+//         const parentComponentName = latest.parent;
+//         const parentTotal = Number(latest.parentTotal || 0);
+
+//         console.log("[LATEST GROUP UPDATE]", parentComponentName, parentTotal);
+
+//         // ------------------------------------------
+//         // Update ONLY the changed parent
+//         // ------------------------------------------
+
+//         applyGlobalProductChange({
+//             product: parentComponentName,
+//             key: "noOfComponent",
+//             value: parentTotal
+//         });
+//         return;
+//     }
+
+//     // ==================================================
+//     // 4. SINGLE COMPONENT
+//     //
+//     // Example:
+//     //
+//     // {
+//     //     type: "SINGLE",
+//     //     component: "Cluster Support",
+//     //     componentValue: 2
+//     // }
+//     // ==================================================
+
+//     if (latest.type === "SINGLE") {
+//         const componentName = latest.component;
+//         const componentValue = Number(latest.componentValue || 0);
+
+//         console.log("[LATEST SINGLE UPDATE]", componentName, componentValue);
+
+//         // ------------------------------------------
+//         // Update ONLY the changed component
+//         // ------------------------------------------
+
+//         applyGlobalProductChange({
+//             product: componentName,
+//             key: "noOfComponent",
+//             value: componentValue
+//         });
+//     }
+// }
+
+
+//=======Component Tabel Linking end=====
+// Create a simple setter to receive the updated group data from the table
+function handleGroupDataChange(newGroupData) {
+  setDataForGroup(newGroupData);
+}
+
 
   function applyGlobalProductChange({ product, key, value }) {
     console.log("[GLOBAL CHANGE]", product, key, value);
@@ -3077,6 +3284,180 @@ If subactivities are EMPTY or NOT FOUND in mapping
 
   //==========Data Management  end =========
 
+// ============================================================
+// UPDATE 2D ACTIVITY
+// One value will be applied to Proto + Serie
+// for the complete activity.
+// ============================================================
+// working but jsx issue in ++  --
+ const updateSubValueFor2D = (activityName, value) => {
+ 
+    // --------------------------------------------------------
+    // Step 1: Convert value to number
+    // --------------------------------------------------------
+ 
+    const numValue = Math.max(0, Number(value) || 0);
+ 
+    // alert(
+    //     "2D UPDATE START\n\n" +
+    //     "Activity: " + activityName + "\n" +
+    //     "Input Value: " + value + "\n" +
+    //     "Number Value: " + numValue
+    // );
+ 
+ 
+    // --------------------------------------------------------
+    // Step 2: Get activity
+    // --------------------------------------------------------
+ 
+    const activity = jsonData?.activities?.[activityName];
+ 
+    if (!activity) {
+ 
+        // alert(
+        //     "2D ERROR\n\n" +
+        //     "Activity not found:\n" +
+        //     activityName
+        // );
+ 
+        return;
+    }
+ 
+ 
+    // alert(
+    //     "2D ACTIVITY FOUND\n\n" +
+    //     "Activity: " + activityName
+    // );
+ 
+ 
+    // --------------------------------------------------------
+    // Step 3: Update activity
+    // --------------------------------------------------------
+ 
+    activity.checked = numValue>0;
+ 
+    // alert(
+    //     "2D ACTIVITY CHECKED\n\n" +
+    //     "Activity: " + activityName + "\n" +
+    //     "checked: true"
+    // );
+ 
+ 
+    // --------------------------------------------------------
+    // Step 4: Update every product/component
+    // --------------------------------------------------------
+ 
+    Object.entries(activity).forEach(([key, product]) => {
+ 
+        // Skip activity-level properties
+        if (
+            key === "extraWorkLoop" ||
+            key === "reWorkLoop" ||
+            key === "standardWorkLoop" ||
+            key === "checked" ||
+            key === "order" ||
+            key === "noOfLoops"
+        ) {
+            return;
+        }
+ 
+ 
+        // Make sure this is an object
+        if (
+            !product ||
+            typeof product !== "object"
+        ) {
+            return;
+        }
+ 
+ 
+        // ----------------------------------------------------
+        // Product level Proto / Serie
+        // ----------------------------------------------------
+ 
+        product.Proto = numValue;
+        product.Serie = numValue;
+ 
+ 
+        // alert(
+        //     "2D PRODUCT UPDATED\n\n" +
+        //     "Activity: " + activityName + "\n" +
+        //     "Product: " + key + "\n" +
+        //     "Proto: " + product.Proto + "\n" +
+        //     "Serie: " + product.Serie
+        // );
+ 
+ 
+        // ----------------------------------------------------
+        // If product has subactivities,
+        // update Proto / Serie there also
+        // ----------------------------------------------------
+ 
+        if (
+            product.subactivity &&
+            typeof product.subactivity === "object"
+        ) {
+ 
+            Object.entries(product.subactivity).forEach(
+                ([subName, subactivity]) => {
+ 
+                    if (
+                        !subactivity ||
+                        typeof subactivity !== "object"
+                    ) {
+                        return;
+                    }
+ 
+ 
+                    subactivity.Proto = numValue;
+                    subactivity.Serie = numValue;
+ 
+ 
+                    // alert(
+                    //     "2D SUBACTIVITY UPDATED\n\n" +
+                    //     "Activity: " + activityName + "\n" +
+                    //     "Product: " + key + "\n" +
+                    //     "Subactivity: " + subName + "\n" +
+                    //     "Proto: " + subactivity.Proto + "\n" +
+                    //     "Serie: " + subactivity.Serie
+                    // );
+ 
+                }
+            );
+        }
+ 
+    });
+ 
+ 
+    // --------------------------------------------------------
+    // Step 5: Update React JSON/state
+    // --------------------------------------------------------
+ 
+    setJsonData({
+        ...jsonData,
+        activities: {
+            ...jsonData.activities,
+            [activityName]: {
+                ...activity
+            }
+        }
+    });
+ 
+ 
+    // --------------------------------------------------------
+    // Step 6: Final confirmation
+    // --------------------------------------------------------
+ 
+    // alert(
+    //     "2D UPDATE COMPLETE\n\n" +
+    //     "Activity: " + activityName + "\n" +
+    //     "Value: " + numValue + "\n" +
+    //     "Proto: " + numValue + "\n" +
+    //     "Serie: " + numValue + "\n" +
+    //     "checked:" + "\n" +(numValue>0)
+    // );
+};
+
   //---------------------OTHER TABLE Start================
 
   // =============================
@@ -3964,6 +4345,8 @@ displaying the contents of a variable `costCentersData` using `JSON.stringify`. 
     UpdateDataManagementResource,
     dataManagementPayload,
 
+    updateSubValueFor2D, // 2D Global table
+
     // expose to UI
     otherTableData,
     updateOtherTableParam,
@@ -3982,5 +4365,10 @@ displaying the contents of a variable `costCentersData` using `JSON.stringify`. 
     updateActivityValue,
     //PDF data
     pdfData,
+
+    // for linkin groupcomponent table with Parent Component table:
+    // handleComponentSelection,
+    dataForGroup,
+    handleGroupDataChange,
   };
 }

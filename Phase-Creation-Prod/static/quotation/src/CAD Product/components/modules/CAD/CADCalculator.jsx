@@ -47,6 +47,12 @@ import { AutoDismissSectionMessage } from "./AutoDismissSectionMessage";
 // thermal sim import
 import { useActivityLogicThermalSimulation } from "../../../../Thermal Simulation/hooks/useActivityLogicThermalSimulation";
 
+import { ProductComponents } from "../../../data/ComponentGrouping/productComponentTable.jsx";
+
+import UnifiedProductTable from "../../global/UnifiedProductTable.jsx"; // new combined table
+
+import TwoDDeliverables from "../../global/TwoDDeliverables.jsx"; // 2D Global Table
+
 // import ThermalSimulation from "../../../../Thermal Simulation/Components/ThermalSimulation";
 
 // new imports -- End
@@ -173,6 +179,8 @@ export default function CADCalculator() {
     UpdateDataManagementResource,
     dataManagementPayload,
 
+    updateSubValueFor2D, // 2D Global table
+
     // expose to UI
     otherTableData,
     updateOtherTableParam,
@@ -191,6 +199,11 @@ export default function CADCalculator() {
 
     // PDF data
     pdfData,
+
+    // for linkin groupcomponent table with Parent Component table:
+    handleComponentSelection,
+    dataForGroup, // saved data from Quotation to be used in Group Component Table
+    handleGroupDataChange,
   } = useActivityLogic();
 
   // get thermal sim logic hook
@@ -217,7 +230,7 @@ export default function CADCalculator() {
 
     return acc;
   }, {});
-  // const dmtweeks = phaseDates?.phase_0?.weeks ?? 0;
+  const dmtweeks = phaseDates?.phase_0?.weeks ?? 0;
 
   //alert("1: CAD => " + JSON.stringify(phaseDates));
   // alert(
@@ -563,6 +576,7 @@ export default function CADCalculator() {
       otherTableData,
 
       global2DRows,
+      dataForGroup, // for linking group component table
       // resourcesPayload,
       // percentagesPayload,
       // industPayload,
@@ -690,6 +704,7 @@ export default function CADCalculator() {
       otherTableData,
 
       global2DRows,
+      dataForGroup, // for linking group component table
       // resourcesPayload,
       // percentagesPayload,
       // industPayload,
@@ -1189,13 +1204,43 @@ export default function CADCalculator() {
             </div> */}
 
                 {/* Product Parts Column */}
-                <div style={styles.column}>
+                {/* <div style={styles.column}>
                   <ProductPartsGlobal
                     data={jsonData}
                     applyGlobalChange={applyGlobalProductChange}
                   />
                 </div>
+                <ProductComponents
+                  productName={globalParams.product}
+                  initialData={dataForGroup || null}
+                  onSelectionChange={(json) => {
 
+                    // 1. Get JSON from ProductComponents
+                    console.log(
+                      "FINAL ProductComponents COMPONENT JSON:",
+                      json
+                    );
+
+                    // 2. Pass JSON to handler
+                    handleComponentSelection(json);
+                  }}
+                />
+                */}
+                <div style={styles.column}>
+                  <UnifiedProductTable
+                    data={jsonData}
+                    productName={globalParams.product}
+                    applyGlobalChange={applyGlobalProductChange}
+                    dataForGroup={dataForGroup}
+                    onGroupDataChange={handleGroupDataChange}
+                  />
+                </div>
+                <div style={styles.column}>
+                  <TwoDDeliverables
+                    activitiesData={jsonData.activities}
+                    updateSubValueFor2D={updateSubValueFor2D}
+                  />
+                </div>
                 <div>
                   {/* Step Mould Column */}
                   {globalParams.product.includes(["Headliner"]) && (

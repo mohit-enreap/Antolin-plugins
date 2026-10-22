@@ -681,6 +681,13 @@ function ActivityTable({ activities, updateActivity }) {
     "Project Planning and Documentation",
   ];
 
+  // Helper to format values: hides decimals for 0 or integers, shows 2 decimals otherwise
+  const formatValue = (val) => {
+    if (val == null || isNaN(val)) return 0;
+    const num = Math.round(Number(val) * 100) / 100;
+    return Number.isInteger(num) ? num : num.toFixed(2);
+  };
+
   // Group by main section
   const grouped = Object.entries(activities).reduce((acc, [key, act]) => {
     const [group, name] = key.split("|");
@@ -730,7 +737,6 @@ function ActivityTable({ activities, updateActivity }) {
             <th>Std</th>
             <th>Proto</th>
             <th>Serie</th>
-            {/* Removed colSpan=3. It is now a single consolidated column */}
             <th style={{ textAlign: "center" }}>Loops (RT / HT / LT)</th>
             <th>Select</th>
             <th>Proto Total</th>
@@ -749,7 +755,7 @@ function ActivityTable({ activities, updateActivity }) {
                 {/* Group Header */}
                 <tr>
                   <td
-                    colSpan={13} // Total columns reduced from 15 to 13
+                    colSpan={13}
                     style={{
                       background: "#0b72d0",
                       color: "#fff",
@@ -764,10 +770,10 @@ function ActivityTable({ activities, updateActivity }) {
                 {normal.map(({ key, name, act }) => (
                   <tr key={key}>
                     <td>{name}</td>
-                    <td>{act.TDL}</td>
-                    <td>{act.COO}</td>
-                    <td>{act.DE}</td>
-                    <td>{act.standardLoop || act.standard}</td>
+                    <td>{formatValue((act.TDL || 0) / 2)}</td>
+                    <td>{formatValue((act.COO || 0) / 2)}</td>
+                    <td>{formatValue((act.DE || 0) / 2)}</td>
+                    <td>{formatValue((act.standardLoop || act.standard || 0) / 2)}</td>
 
                     <td>
                       <input
@@ -793,7 +799,6 @@ function ActivityTable({ activities, updateActivity }) {
                       />
                     </td>
 
-                    {/* Single column instead of colSpan=3 */}
                     <td style={{ textAlign: "center" }}>
                       {!HIDE_LOOP_ACTIVITIES.includes(name) ? (
                         <input
@@ -826,10 +831,16 @@ function ActivityTable({ activities, updateActivity }) {
                     </td>
 
                     {/* Previews & Totals */}
-                    <td>{act.previewProtoTotal || 0}</td>
-                    <td>{act.previewSerieTotal || 0}</td>
-                    <td>{act.previewTotal || 0}</td>
-                    <td>{act.calculatedTotal || 0}</td>
+                    <td>{formatValue((act.previewProtoTotal || 0) / 2)}</td>
+                    <td>{formatValue((act.previewSerieTotal || 0) / 2)}</td>
+                    <td>{formatValue((act.previewTotal || 0) / 2)}</td>
+                    <td>
+                      {formatValue(
+                        !name.includes("ITERATIONS")
+                          ? (act.calculatedTotal || 0) / 2
+                          : act.calculatedTotal || 0
+                      )}
+                    </td>
                   </tr>
                 ))}
 
@@ -1002,10 +1013,10 @@ function ActivityTable({ activities, updateActivity }) {
                       </td>
 
                       {/* Totals */}
-                      <td>{previewProtoTotal}</td>
-                      <td>{previewSerieTotal}</td>
-                      <td>{previewTotal}</td>
-                      <td>{calculatedTotal}</td>
+                      <td>{formatValue(previewProtoTotal / 2)}</td>
+                      <td>{formatValue(previewSerieTotal / 2)}</td>
+                      <td>{formatValue(previewTotal / 2)}</td>
+                      <td>{formatValue(calculatedTotal / 2)}</td>
                     </tr>
                   );
                 })}

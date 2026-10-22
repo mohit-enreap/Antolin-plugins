@@ -271,7 +271,7 @@ export default function ProductPartsGlobal({ data, applyGlobalChange }) {
       products.forEach((productName) => {
         /*
         STEP 1: Find saved data for this product
- 
+
         data.activities structure looks like:
         {
           activity1: {
@@ -281,7 +281,7 @@ export default function ProductPartsGlobal({ data, applyGlobalChange }) {
             "Bumper": { componentSelected: false, noOfComponent: 1 }
           }
         }
- 
+
         We:
         - Take all activity objects
         - Find the one that contains the current product
@@ -293,7 +293,7 @@ export default function ProductPartsGlobal({ data, applyGlobalChange }) {
 
         /*
         STEP 2: Initialize / overwrite UI state for this product
- 
+      
         - If saved data exists → use it
         - Otherwise → use safe defaults
       */
@@ -329,7 +329,7 @@ export default function ProductPartsGlobal({ data, applyGlobalChange }) {
   return (
     <div>
       <h3>3D Component Configuration</h3>
-    
+
       {/* <table border="1" width="100%">
         <thead>
           <tr>

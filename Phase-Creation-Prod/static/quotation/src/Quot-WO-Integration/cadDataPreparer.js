@@ -96,6 +96,21 @@ export default function prepareCADData(activities, Global, feasibility, feasibil
 
     }
     console.log("Last order : ", order)
+
+    if (Global["Geometrical Study"] === "YES") {
+        for (const activity in cadActivities) {
+            if (Global.product === "Centre Console") {
+
+                // 1. Check if the activity contains the "CENTER CONSOLE ASSEMBLY" key
+                if (cadActivities[activity] && cadActivities[activity]["CENTER CONSOLE ASSEMBLY"]) {
+                    // 2. Safely assign the value without optional chaining
+                    cadActivities[activity]["CENTER CONSOLE ASSEMBLY"]["componentSelected"] = true;
+
+                }
+            }
+        }
+    }
+
     // new logic for Feasibility
     if (feasibility === "YES") {
         let totalSelectedComponents = 0;

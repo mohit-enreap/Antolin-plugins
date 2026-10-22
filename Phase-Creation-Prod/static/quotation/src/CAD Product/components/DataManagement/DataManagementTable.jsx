@@ -47,7 +47,7 @@ export default function DataManagementTable({ rows, weeks, onChange}) {
 
             {/* <td>{weeks}</td> */}
             <td>{row.hoursPerWeek}</td>
-            <td>{row.totalHours}</td>
+            <td>{row.totalHours.toFixed(2)}</td>
           </tr>
         ))}
       </tbody>

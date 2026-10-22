@@ -712,7 +712,7 @@ export function CostSheetHelperLogic() {
   function populatePhaseCosts(costSheet, phaseWisePercentages = {}) {
     if (phaseWisePercentages == null) return;
 
-    const years = [2025, 2026, 2027, 2028, 2029];
+    const years = [2025, 2026, 2027, 2028, 2029, 2030];
 
     // Convert array → map for easy lookup
     const phasePercentMap = {};

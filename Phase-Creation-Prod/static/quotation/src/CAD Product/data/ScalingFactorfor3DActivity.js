@@ -80,7 +80,6 @@ export const SCALING_FACTOR_FOR_3D_ACTIVITY = {
       "Fixation File Updation",
       "Rfq Activity",
       "Dmu",
-      "Internal Drawing Main Parts",
       "Customer Review Meeting - Lop & Index Change Management",
       "Internal Design Review With Bu"
 
@@ -90,13 +89,75 @@ export const SCALING_FACTOR_FOR_3D_ACTIVITY = {
 
   IP: {
     activities: [
-      "Concept study",
-      "Packaging analysis",
-      "Master section creation",
+      "Surfaces analysis",
+      "Feedback about surfaces to Customer",
+      "Clash & clearance Analysis (Packaging)",
+      "Initial RFQ information",
+      "Feasibility studies due to Antolin processes",
+      "Cross car beam fixation strategy (CCB, MQT)",
+      "Antolin parts fixation strategy",
+      "Hang on parts fixation strategy",
+      "Airbag passenger concept",
+      "Airducts and airchannel concept",
+      "RPS strategy",
+      "Kinematic assembly A pillar",
+      "Glovebox concept sections and mechanism layout",
+      "Master Section creation for 3D construction (DgL)",
+      "Analysis with Tech hand book if any & BU agreement",
+      "Auxiliary parts�creation",
+
+      "Engineering concept surrounding parts & fixations 3D creation",
+      "Locator system for  Assembly & between components",
+
+      "Passenger airbag chute area full construction & ribs structure",
+      "Rigidity ribs & features in assembly components",
+      "Assembly kinematics (IP complete & single parts)",
+      "Wall Thickness analysis",
       "Draft analysis",
-      "Gap and flush",
+      "Weight reduction",
+      "Detailed Radius application",
+      "Fixation File Updation",
+      "RFQ activity",
       "DMU",
-      "Customer review meeting"
+      "Customer review meeting - LOP & Index change management",
+      "Internal Design Review with BU"
+
+    ]
+  },
+  "Centre Console": {
+    activities: [
+      "Surfaces analysis",
+      "Feedback about surfaces to Customer",
+      "Clash & clearance Analysis (Packaging)",
+      "Initial RFQ information",
+      "Feasibility studies due to Antolin processes",
+      "BIW & IP fixation strategy",
+      "Antolin parts fixation strategy",
+      "Hang on parts fixation strategy",
+      "Armrest concept",
+      "Airducts and airvent concept.",
+      "RPS strategy",
+      "Kinematic assembly into vehicle",
+      "Master Section creation for 3D construction (DgL)",
+      "Analysis with Tech hand book if any & UB agreement",
+      "Auxiliary parts creation",
+      "Engineering concept surrounding parts & fixations 3D creation",
+      "Locator system for  Assembly & between components", //<----
+      "Rigidity ribs & features in assembly components",
+      "Airduct",
+      "Armrest mechanism (sliding +guide or Rotation+hinge)",
+      "Armrest latch",
+      "Assembly kinematics (CC complete & single parts)",
+      "Environment Clash & Band analysis",
+      "Wall Thickness analysis",
+      "Draft analysis",
+      "Weight reduction",
+      "Fixation File Updation",
+      "Detailed Radius application",
+      "RFQ activity",
+      "DMU",
+      "Customer review meeting - LOP & Index change management",
+      "Internal Design Review with BU"
     ]
   }
 };

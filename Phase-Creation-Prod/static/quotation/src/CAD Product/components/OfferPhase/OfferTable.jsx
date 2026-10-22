@@ -274,6 +274,7 @@ export default function OfferTable({
                 <input
                   type="number"
                   value={row.resources}
+                  min="0"
                   onChange={(e) =>
                     onChange({
                       activityKey: row.activityKey,
@@ -299,7 +300,8 @@ export default function OfferTable({
               </td> */}
               <td>{row.weeks}</td>
               <td>{row.hoursPerWeek}</td>
-              <td>{row.totalHours}</td>
+              <td>{((n) => Number.isInteger(n) ? n : n.toFixed(2))(
+                Math.round(row.totalHours))}</td>
             </tr>
           ))}
         </tbody>

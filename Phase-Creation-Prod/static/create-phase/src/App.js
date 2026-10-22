@@ -114,13 +114,15 @@ const App = () => {
   const [reworkHours, setReworkHours] = useState(0);
   const [threeDModifications, setThreeDModifications] = useState(0);
   const [twoDModifications, setTwoDModifications] = useState(0);
+  const [dataManagement, setDataManagement] = useState(0);
   // Which quotation version this form was built from, stamped into the saved
   // snapshot so a later compare knows rather than trusting customfield_12738.
   const [quotationVersion, setQuotationVersion] = useState(null);
-  const [dataManagement, setDataManagement] = useState(0);
   const [product, setProduct] = useState("");
 
   const [iterations, setIterations] = useState(0);
+
+  const [createButtonDisabled, setCreateButtonDisabled] = useState(false);
 
   // useEffect(async () => {
   //   const context = await view.getContext();
@@ -276,51 +278,78 @@ const App = () => {
   }, []);
 
   const loadAllValues = async (phase) => {
-    const context = await view.getContext();
-    const issue = context.extension.issue; // context.issue may contain { key: 'ABC-123', ... }
-    console.log(issue);
-    const fetchMilestones = async () => {
-      const data = await invoke("getConfigData", {
-        issue,
-        phase,
-        key: "Milestone",
-      });
-      setMilestones(data);
-    };
-    const fetchActivities = async () => {
-      const data = await invoke("getConfigData", {
-        issue,
-        phase,
-        key: "Activity",
-      });
-      setActivities(data.activity);
-      console.log("producttttt", data.product);
-      setProduct(data.product);
-      setQuotationVersion(data.quotationVersion || null);
-    };
-    await fetchMilestones();
-    await fetchActivities();
-    setCreated(false);
-    if (issue && issue.key) {
-      setIssueKey(issue.key);
-      // Once we have issueKey, fetch data from storage
-      const base64String = await invoke("getData", {
-        issueKey: issue.key,
-        phase,
-      });
-      if (base64String) {
-        const uint8Arr = base64ToUint8Array(base64String);
-        const decompressedString = pako.inflate(uint8Arr, { to: "string" });
-        const parsedData = JSON.parse(decompressedString);
+    setCreateButtonDisabled(true); // Disable the create button when loading values
+    console.log("Button disabled set to true");
+    try {
+      const context = await view.getContext();
+      const issue = context.extension.issue; // context.issue may contain { key: 'ABC-123', ... }
+      console.log(issue);
+      const fetchMilestones = async () => {
+        const data = await invoke("getConfigData", {
+          issue,
+          phase,
+          key: "Milestone",
+        });
+        setMilestones(data);
+      };
+      const fetchActivities = async () => {
+        const data = await invoke("getConfigData", {
+          issue,
+          phase,
+          key: "Activity",
+        });
 
-        setPhaseName(parsedData.phaseName);
-        // setExtraWork(parsedData.extraWork);
-        setMilestones(parsedData.milestones);
-        setActivities(parsedData.activities);
-        setTotalHours(parsedData.totalHours);
-        setCreated(true);
+        // Process the default data: uncheck AND set standardLoop to 0 if standard is 0
+        const processedActivities = Object.fromEntries(
+          Object.entries(data.activity).map(([key, value]) => [
+            key,
+            {
+              ...value,
+              checked:
+                !key.includes("ITERATIONS") && value.standard === 0
+                  ? false
+                  : value.checked,
+              standardLoop:
+                !key.includes("ITERATIONS") && value.standard === 0
+                  ? 0
+                  : value.standardLoop, // <-- Added this line
+            },
+          ]),
+        );
+
+        setActivities(processedActivities);
+        console.log("producttttt", data.product);
+        setProduct(data.product);
+        setQuotationVersion(data.quotationVersion || null);
+      };
+      await fetchMilestones();
+      await fetchActivities();
+      setCreated(false);
+      if (issue && issue.key) {
+        setIssueKey(issue.key);
+        // Once we have issueKey, fetch data from storage
+        const base64String = await invoke("getData", {
+          issueKey: issue.key,
+          phase,
+        });
+        if (base64String) {
+          const uint8Arr = base64ToUint8Array(base64String);
+          const decompressedString = pako.inflate(uint8Arr, { to: "string" });
+          const parsedData = JSON.parse(decompressedString);
+
+          setPhaseName(parsedData.phaseName);
+          // setExtraWork(parsedData.extraWork);
+          setMilestones(parsedData.milestones);
+          setActivities(parsedData.activities);
+          setTotalHours(parsedData.totalHours);
+          setCreated(true);
+        }
       }
+    } catch (error) {
+      console.error("Error loading values:", error);
     }
+    console.log("Button disabled set to false");
+    setCreateButtonDisabled(false); // Enable the create button after loading data
   };
 
   function uint8ArrayToBase64(uint8Arr) {
@@ -860,6 +889,7 @@ const App = () => {
                 setPhaseName(selected);
                 loadAllValues(selected.value);
               }}
+              isDisabled={createButtonDisabled}
               value={phaseName}
               de
               isRequired
@@ -1062,7 +1092,11 @@ const App = () => {
           >
             Cancel
           </a>
-          <Button appearance="primary" onClick={handleCreate}>
+          <Button
+            appearance="primary"
+            onClick={handleCreate}
+            isDisabled={createButtonDisabled}
+          >
             Create
           </Button>
         </div>

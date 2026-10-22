@@ -130,7 +130,7 @@ export const CUSTOMER_PRODUCT_CONFIG1 = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -590,7 +590,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -743,7 +743,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 100%",
       "3D_AddTDL34": "No",
-      "3D_TDL": "G. A. Ingeniera (IF)",
+      "3D_TDL": "G. A. Ingeniería (IF)",
       "3D_Coord": "BCC 100%",
       "3D_SW": "G.A.Pune (IF)",
       "3D_Feasib": "INTERTRIM",
@@ -818,7 +818,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -1046,7 +1046,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -1274,7 +1274,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -1502,7 +1502,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -1730,7 +1730,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -1958,7 +1958,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -2186,7 +2186,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -2414,7 +2414,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "Antolin Mexico",
       "2D_OEM": "Antolin Mexico",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -2642,7 +2642,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "Antolin Mexico",
       "2D_OEM": "Antolin Mexico",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -2870,7 +2870,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "Antolin Mexico",
       "2D_OEM": "Antolin Mexico",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -3098,7 +3098,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -3326,7 +3326,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "Antolin Mexico",
       "2D_OEM": "Antolin Mexico",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -3554,7 +3554,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -3782,7 +3782,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "Antolin Mexico",
       "2D_OEM": "Antolin Mexico",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -4010,7 +4010,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "Antolin Mexico",
       "2D_OEM": "Antolin Mexico",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -4238,7 +4238,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -4466,7 +4466,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -4694,7 +4694,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -4922,7 +4922,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -5150,7 +5150,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -5378,7 +5378,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -5606,7 +5606,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -5834,7 +5834,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -6062,7 +6062,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -6290,7 +6290,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -6518,7 +6518,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -6746,7 +6746,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "Antolin Mexico",
       "2D_OEM": "Antolin Mexico",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -6974,7 +6974,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -7202,7 +7202,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -7430,7 +7430,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -7658,7 +7658,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -7886,7 +7886,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -8114,7 +8114,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -8342,7 +8342,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -8570,7 +8570,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -8798,7 +8798,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -9026,7 +9026,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "Antolin Mexico",
       "2D_OEM": "Antolin Mexico",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -9254,7 +9254,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -9482,7 +9482,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -9710,7 +9710,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -9938,7 +9938,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -10166,7 +10166,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -10394,7 +10394,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -10622,7 +10622,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -10850,7 +10850,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -11078,7 +11078,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -11306,7 +11306,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -11534,7 +11534,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -11762,7 +11762,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -11990,7 +11990,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -12218,7 +12218,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -12446,7 +12446,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -12674,7 +12674,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -12902,7 +12902,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -13130,7 +13130,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -13358,7 +13358,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -13586,7 +13586,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -13814,7 +13814,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "Antolin Mexico",
       "2D_OEM": "Antolin Mexico",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -14042,7 +14042,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -14270,7 +14270,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "Antolin Mexico",
       "2D_OEM": "Antolin Mexico",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -14498,7 +14498,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -14726,7 +14726,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -14954,7 +14954,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -15182,7 +15182,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -15410,7 +15410,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -15638,7 +15638,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -15866,7 +15866,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -16094,7 +16094,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -16322,7 +16322,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -16550,7 +16550,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -16778,7 +16778,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "Antolin Mexico",
       "2D_OEM": "Antolin Mexico",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -17006,7 +17006,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -17234,7 +17234,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -17462,7 +17462,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -17690,7 +17690,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -17918,7 +17918,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -18146,7 +18146,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -18374,7 +18374,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -18602,7 +18602,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -18830,7 +18830,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "G.A.Pune (IF)",
       "2D_OEM": "G.A.Pune (IF)",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -19058,7 +19058,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",
@@ -19286,7 +19286,7 @@ export const CUSTOMER_PRODUCT_CONFIG = {
       THR_TCL: "G.A.Pune (IL)",
       PS_PSL: "G.A.Pune (IL)",
     },
-    CC: {
+    "Centre Console": {
       "2D_INT": "",
       "2D_OEM": "",
       "3D_TDL (HCC/BCC)": "HCC 60% BCC 40%",

@@ -32,7 +32,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Acura": {
@@ -67,7 +68,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Aiways": {
@@ -102,7 +104,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Alfa Romeo": {
@@ -137,7 +140,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Ashok Leyland": {
@@ -172,7 +176,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Aston Martin": {
@@ -207,7 +212,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Audi": {
@@ -242,7 +248,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Bajaj": {
@@ -277,7 +284,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Bentley": {
@@ -312,7 +320,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "BMW": {
@@ -347,7 +356,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Buick": {
@@ -382,7 +392,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Cadillac": {
@@ -417,7 +428,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Canoo": {
@@ -452,7 +464,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Chery": {
@@ -487,7 +500,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Chevrolet": {
@@ -522,7 +536,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "CHJ": {
@@ -557,7 +572,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Chrysler": {
@@ -592,7 +608,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Dodge": {
@@ -627,7 +644,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Evergrande": {
@@ -662,7 +680,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "FAW": {
@@ -697,7 +716,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Ferrari": {
@@ -732,7 +752,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Fiat": {
@@ -767,7 +788,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Fisker": {
@@ -802,7 +824,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Force Motors": {
@@ -837,7 +860,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Ford": {
@@ -872,7 +896,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Foxtron": {
@@ -907,7 +932,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Fujian": {
@@ -942,7 +968,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "GAZ": {
@@ -977,7 +1004,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Geely": {
@@ -1012,7 +1040,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "GMC": {
@@ -1047,7 +1076,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "G�nsel": {
@@ -1082,7 +1112,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Honda": {
@@ -1117,7 +1148,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Hongqi": {
@@ -1152,7 +1184,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Hozon": {
@@ -1187,7 +1220,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Hyundai": {
@@ -1222,7 +1256,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Iconiq": {
@@ -1257,7 +1292,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Ineos": {
@@ -1292,7 +1328,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Isuzu": {
@@ -1327,7 +1364,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Iveco": {
@@ -1362,7 +1400,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Jeep": {
@@ -1397,7 +1436,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "JLR": {
@@ -1432,7 +1472,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Karma": {
@@ -1467,7 +1508,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "KIA": {
@@ -1502,7 +1544,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Lada": {
@@ -1537,7 +1580,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Lamborghini": {
@@ -1572,7 +1616,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Lincoln": {
@@ -1607,7 +1652,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Mahindra": {
@@ -1642,7 +1688,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "MAN": {
@@ -1677,7 +1724,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Maserati": {
@@ -1712,7 +1760,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Mazda": {
@@ -1747,7 +1796,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Mercedes-Benz": {
@@ -1782,7 +1832,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "MG": {
@@ -1817,7 +1868,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Mini": {
@@ -1852,7 +1904,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Mitsubishi": {
@@ -1887,7 +1940,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "NIO": {
@@ -1922,7 +1976,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Nissan": {
@@ -1957,7 +2012,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Polestar": {
@@ -1992,7 +2048,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Porsche": {
@@ -2027,7 +2084,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "PSA": {
@@ -2062,7 +2120,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Qoros": {
@@ -2097,7 +2156,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Ram": {
@@ -2132,7 +2192,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Renault": {
@@ -2167,7 +2228,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Rivian": {
@@ -2202,7 +2264,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Rolls Royce": {
@@ -2237,7 +2300,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Saab": {
@@ -2272,7 +2336,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "SAIC": {
@@ -2307,7 +2372,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Seat": {
@@ -2342,7 +2408,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Skoda": {
@@ -2377,7 +2444,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Smart": {
@@ -2412,7 +2480,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Sono Motors": {
@@ -2447,7 +2516,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Stellantis": {
@@ -2482,7 +2552,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Suzuki": {
@@ -2517,7 +2588,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Tata": {
@@ -2552,7 +2624,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Tesla": {
@@ -2587,7 +2660,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "TOGG": {
@@ -2622,7 +2696,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Toyota": {
@@ -2657,7 +2732,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "UAZ": {
@@ -2692,7 +2768,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Velocity": {
@@ -2727,7 +2804,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Vinfast": {
@@ -2762,7 +2840,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Volkswagen": {
@@ -2797,7 +2876,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Volvo": {
@@ -2832,7 +2912,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Webasto": {
@@ -2867,7 +2948,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Xiaopeng": {
@@ -2902,7 +2984,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Yulon": {
@@ -2937,7 +3020,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         },
         "Zotye": {
@@ -2972,7 +3056,8 @@ export const CAE_SHORTCUT = {
                 "Transient Defrosting/Demisting - Windshield Defrost and side Demister": "No",
                 "Simulation-Validation Correlation RT": "Yes",
                 "Simulation-Validation Correlation HT": "No",
-                "Simulation-Validation Correlation LT": "No"
+                "Simulation-Validation Correlation LT": "No",
+                "ITERATIONS": "Yes"
             }
         }
     }

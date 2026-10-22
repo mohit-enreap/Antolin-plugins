@@ -2257,6 +2257,26 @@ V1/V2/V3/V4 -----
   };
 
   const downloadPDF = () => {
+
+    const formatNumber2 = (value) => {
+  if (
+    value === null ||
+    value === undefined ||
+    value === "" ||
+    value === "-"
+  ) {
+    return "-";
+  }
+
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : Number(String(value).replace(/,/g, "").trim());
+
+  return Number.isFinite(numericValue)
+    ? numericValue.toFixed(2)
+    : cleanText(value);
+};
     console.log("PDF DATA -->");
     const doc = new jsPDF();
 
@@ -2301,21 +2321,21 @@ V1/V2/V3/V4 -----
       "TOTAL Cost",
     ];
 
-    const formatRows = (rowsArray) =>
-      rowsArray?.map((row) => [
-        row.org ?? "",
-        row.role ?? "",
-        row.phase0?.hours ?? "-",
-        row.phase0?.cost ?? "-",
-        row.phase1?.hours ?? "-",
-        row.phase1?.cost ?? "-",
-        row.phase2?.hours ?? "-",
-        row.phase2?.cost ?? "-",
-        row.phase34?.hours ?? "-",
-        row.phase34?.cost ?? "-",
-        row.total?.hours ?? "-",
-        row.total?.cost ?? "-",
-      ]) ?? [];
+   const formatRows = (rowsArray) =>
+  rowsArray?.map((row) => [
+    row.org ?? "",
+    row.role ?? "",
+    formatNumber2(row.phase0?.hours),
+    formatNumber2(row.phase0?.cost),
+    formatNumber2(row.phase1?.hours),
+    formatNumber2(row.phase1?.cost),
+    formatNumber2(row.phase2?.hours),
+    formatNumber2(row.phase2?.cost),
+    formatNumber2(row.phase34?.hours),
+    formatNumber2(row.phase34?.cost),
+    formatNumber2(row.total?.hours),
+    formatNumber2(row.total?.cost),
+  ]) ?? [];
 
     const sections = [
       { title: "Design", rows: data?.rows },
@@ -2549,38 +2569,47 @@ V1/V2/V3/V4 -----
     // =========================================================
     // 3. ADD ON COMPONENTS TABLE (Atlassian Teal)
     // =========================================================
-    checkPageBreak(20);
+if (pdfData?.addOnComponents?.length > 0) {
+  checkPageBreak(20);
 
-    doc.setFontSize(11);
-    doc.text("Add On Components", 14, currentY);
-    currentY += 4;
+  doc.setFontSize(11);
+  doc.text("Add On Components", 14, currentY);
+  currentY += 4;
 
-    const addOnBody = pdfData.addOnComponents.map((item) => [
-      cleanText(item.activity),
-      cleanText(item.product),
-      cleanText(item.noOfComponent),
-    ]);
+  const addOnBody = pdfData.addOnComponents.map((item) => [
+    cleanText(item.activity),
+    cleanText(item.product),
+    cleanText(item.noOfComponent),
+  ]);
 
-    autoTable(doc, {
-      startY: currentY,
-      head: [["Activity", "Product", "No Of Components"]],
-      body: addOnBody,
-      theme: "grid",
-      styles: { fontSize: 6.5, cellPadding: 1.5 },
-      headStyles: {
-        fillColor: [0, 136, 170], // Atlassian Teal
-        textColor: 255,
-        fontStyle: "bold",
-      },
-      alternateRowStyles: { fillColor: [244, 245, 247] },
-    });
+  autoTable(doc, {
+    startY: currentY,
+    head: [["Activity", "Product", "No Of Components"]],
+    body: addOnBody,
+    theme: "grid",
+    styles: {
+      fontSize: 6.5,
+      cellPadding: 1.5,
+    },
+    headStyles: {
+      fillColor: [0, 136, 170],
+      textColor: 255,
+      fontStyle: "bold",
+    },
+    alternateRowStyles: {
+      fillColor: [244, 245, 247],
+    },
+  });
 
-    currentY = doc.lastAutoTable.finalY + 8;
+  currentY = doc.lastAutoTable.finalY + 8;
+}
 
     // =========================================================
     // CAE ACTIVITIES SECTION (Atlassian Purple)
     // =========================================================
-    if (Object.keys(sharedRef?.currentCAE?.pdfData || {}).length > 0) {
+    console.log("PDF CAE hrs :", sharedRef?.currentCAE?.grandTotal);
+    
+    if (Object.keys(sharedRef?.currentCAE?.pdfData || {}).length > 0 && sharedRef?.currentCAE?.grandTotal > 0) {
       checkPageBreak(25);
 
       doc.setFontSize(11);
@@ -2761,12 +2790,12 @@ V1/V2/V3/V4 -----
       currentY += 4;
 
       const body = rows.map((row) => [
-        cleanText(row.activityKey),
-        cleanText(row.resources),
-        cleanText(row.weeks),
-        cleanText(row.hoursPerWeek),
-        cleanText(row.totalHours),
-      ]);
+  cleanText(row.activityKey),
+  formatNumber2(row.resources),
+  formatNumber2(row.weeks),
+  formatNumber2(row.hoursPerWeek),
+  formatNumber2(row.totalHours),
+]);
 
       autoTable(doc, {
         startY: currentY,

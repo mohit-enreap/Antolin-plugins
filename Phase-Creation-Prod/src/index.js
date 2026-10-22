@@ -2481,8 +2481,7 @@ export async function enqueueUpdateLog(event, context) {
   console.log(projectKey);
 
   // Dev --> CDEMO // Prod --> CWO // Staging --> CTEST
-  if (projectKey === "CWO" || projectKey === "CTEST") {
-    // Dev --> CDEMO // Prod --> CWO // Stage --> CTEST
+  if (projectKey === "CWO") {
     let retryCount = 0;
     let success = false;
 
@@ -3906,7 +3905,7 @@ export async function updateIssuesDateField(jql, dateFieldId) {
 export async function updateToday(context) {
   console.log("Scheduled trigger invoked 1");
   console.log(context);
-  const rawJql = `project in ( CWO) AND issuetype in (Activity, "Work Order", Task) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`;
+  const rawJql = `project in (CWO) AND issuetype in (Activity, "Work Order", Task) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`;
   // const rawJql = `project in (CDEMO) AND (cf[11168] < now() OR cf[11168] IS EMPTY) ORDER BY cf[11168] ASC`;
 
   await updateIssuesDateField(rawJql, "customfield_11168");
@@ -6184,7 +6183,7 @@ resolver.define("dumpStorage", async ({ payload }) => {
   // if the resolver is invoked directly.
   if (
     !projectKey ||
-    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+    !projectKey.startsWith("CWO") //!(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
   ) {
     return {
       ok: false,
@@ -6262,7 +6261,7 @@ resolver.define("dumpTransitions", async ({ payload }) => {
   const phaseKey = payload?.phaseKey;
   if (
     !projectKey ||
-    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+    !projectKey.startsWith("CWO") //!(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
   ) {
     return {
       ok: false,
@@ -6522,7 +6521,7 @@ async function buildPlan(payload) {
   const projectKey = payload?.issue?.key;
   if (
     !projectKey ||
-    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+    !projectKey.startsWith("CWO") //!(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
   ) {
     return {
       ok: false,
@@ -6698,7 +6697,7 @@ resolver.define("applyPlan", async ({ payload }) => {
 //   - every attempt is returned in a receipt with before, after and status —
 //     the only record of what a write replaced
 
-const DRY_RUN = true;
+const DRY_RUN = false;
 
 const WRITE_FIELDS = [
   { k: "total", cf: "customfield_10061" },
@@ -6714,7 +6713,7 @@ resolver.define("applyWrites", async ({ payload }) => {
   const phaseKey = payload?.phaseKey;
   if (
     !projectKey ||
-    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+    !projectKey.startsWith("CWO") //!(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
   ) {
     return {
       ok: false,
@@ -7349,7 +7348,7 @@ resolver.define("rollupTotals", async ({ payload }) => {
   const projectKey = payload?.issue?.key;
   if (
     !projectKey ||
-    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+    !projectKey.startsWith("CWO") //!(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
   ) {
     return {
       ok: false,
@@ -7366,7 +7365,7 @@ resolver.define("getLastOverwrite", async ({ payload }) => {
   const phaseKey = payload?.phaseKey;
   if (
     !projectKey ||
-    !(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
+    !projectKey.startsWith("CWO") //!(projectKey.startsWith("CTEST") || projectKey.startsWith("CWO"))
   ) {
     return {
       ok: false,
@@ -7530,7 +7529,31 @@ async function patchPhaseSnapshot(
     )
       continue;
     const n = snapNorm(row.summary);
-    const ak = byNorm[n];
+    let ak = byNorm[n];
+    // The snapshot is written by Create Phase, which cooks the base catalog.
+    // An activity that exists only in the comparison target — a quotation
+    // version, or "{product} New" — has never been in that form, so byNorm
+    // cannot find it and the add was skipped silently: nothing in touched,
+    // nothing in addedActivities, queuedCreate null, and create-activity never
+    // ran. Create the entry so the branch below fills and ticks it exactly as
+    // it does for one that was already there. Proven on CWO-57056, where all
+    // four adds were sections the base catalog does not contain.
+    if (!ak && (isAdd || isReplace || isCloseAdd) && cookedByNorm[n]) {
+      ak = row.summary;
+      acts[ak] = {
+        order: cookedByNorm[n].order ?? "999",
+        checked: false,
+        standardLoop: 0,
+        extraWorkLoop: 0,
+        reWorkLoop: 0,
+        standard: 0,
+        TDL: 0,
+        COO: 0,
+        DE: 0,
+        total: 0,
+      };
+      byNorm[n] = ak;
+    }
     if (!ak) continue;
     const a = acts[ak];
     const before = {

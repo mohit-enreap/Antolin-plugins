@@ -1538,5 +1538,7 @@ export const productParts = {
     "DOUBLE RAIL": "11230",
     "FEC Assembly": "11284",
     "IP ASSEMBLY": "11450",
-    "FEC - CAE": "11648"
+    "FEC - CAE": "11648",
+    "ALL (Stack Up Tolerances)": "12159",
+    "SUNVISOR - CAE": "12192"
 }
