@@ -1358,8 +1358,10 @@ function App() {
       }
 
       // The job runs on the queue, so the response carries no receipt. Poll the
-      // stored one for up to three minutes.
-      for (let i = 0; i < 60; i++) {
+      // stored one for up to ten minutes: the receipt is the consumer's last
+      // step, and a phase with twenty-odd deletes spends longer than three
+      // minutes on those alone before it gets there.
+      for (let i = 0; i < 200; i++) {
         await new Promise((r) => setTimeout(r, 3000));
         const now = await invoke("getLastOverwrite", { issue, phaseKey });
         if (now?.record?.at && now.record.at !== prevAt) {
@@ -1389,7 +1391,9 @@ function App() {
           return;
         }
       }
-      setError("Still running. Check the Gantt in a minute.");
+      setError(
+        `${phaseLabel} is still being applied. It is safe to close this window — check the Gantt in a few minutes. Do not click Overwrite again while it runs.`,
+      );
     } catch (e) {
       setError(
         isSessionLost(e)
